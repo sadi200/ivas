@@ -2,7 +2,6 @@ import os
 import re
 import json
 import time
-import random
 import shutil
 import requests
 import threading
@@ -11,9 +10,11 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 import customtkinter as ctk
 from tkinter import messagebox
-import undetected_chromedriver as uc
+
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import StaleElementReferenceException
 
 BOT_TOKEN = "8867778383:AAGKHcZdr4mA7bX2Tl4AO_LOrqjelOlTqt4"
@@ -288,7 +289,7 @@ def add_balance_fast(uid, reward_amount, range_name=""):
 class IvaSMSScraperApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("IvaSMS Scalable Monitor (Anti-Redirect & Captcha Safe)")
+        self.root.title("IvaSMS Standard Selenium Monitor")
         self.root.geometry("670x650")
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
@@ -299,7 +300,7 @@ class IvaSMSScraperApp:
         self.last_otp_time = time.time()
         self.idle_refresh_seconds = 300
 
-        self.title_label = ctk.CTkLabel(root, text="IvaSMS Live Monitor Engine (Anti-Redirect)", font=ctk.CTkFont(size=20, weight="bold"))
+        self.title_label = ctk.CTkLabel(root, text="IvaSMS Live Monitor Engine (Selenium)", font=ctk.CTkFont(size=20, weight="bold"))
         self.title_label.pack(pady=12)
 
         self.btn_frame = ctk.CTkFrame(root)
@@ -369,65 +370,18 @@ class IvaSMSScraperApp:
         self.log_box.insert("end", f"[{timestamp}] {text}\n")
         self.log_box.see("end")
 
-    def find_chrome(self):
-        paths = ["/usr/bin/google-chrome-stable", "/usr/bin/google-chrome", "/snap/bin/chromium", "/usr/bin/chromium-browser"]
-        for p in paths:
-            if os.path.exists(p): return p
-        try:
-            res = subprocess.run(['which', 'google-chrome-stable'], capture_output=True, text=True)
-            if res.returncode == 0: return res.stdout.strip()
-        except Exception: pass
-        return None
-
-    def get_chrome_version_main(self):
-        chrome_bin = self.find_chrome()
-        if chrome_bin:
-            try:
-                output = subprocess.check_output([chrome_bin, "--version"]).decode("utf-8")
-                match = re.search(r'(\d+)\.', output)
-                if match:
-                    return int(match.group(1))
-            except Exception:
-                pass
-        return 149
-
     def start_browser(self):
         try:
             self.status_label.configure(text="Status: Launching Chrome...", text_color="orange")
-            cache_path = os.path.expanduser("~/.local/share/undetected_chromedriver")
-            if os.path.exists(cache_path):
-                try: shutil.rmtree(cache_path)
-                except Exception: pass
-
-            chrome_bin = self.find_chrome()
-            options = uc.ChromeOptions()
-            if chrome_bin:
-                options.binary_location = chrome_bin
-
+            options = Options()
             options.add_argument("--start-maximized")
             options.add_argument(f"--user-data-dir={CHROME_PROFILE}")
-            options.add_argument("--no-sandbox")
             options.add_argument("--disable-dev-shm-usage")
-            options.add_argument("--disable-popup-blocking")
+            options.add_argument("--no-sandbox")
 
-            v_main = self.get_chrome_version_main()
-            self.log(f"Detected Chrome Major Version: {v_main}")
-
-            try:
-                self.driver = uc.Chrome(options=options, version_main=v_main, use_subprocess=True)
-            except Exception:
-                self.driver = uc.Chrome(options=options, version_main=149, use_subprocess=True)
-
+            self.driver = webdriver.Chrome(options=options)
             self.driver.get(TARGET_URL)
-            time.sleep(4)
-
-            for _ in range(10):
-                title = self.driver.title.lower()
-                if "just a moment" in title or "checking your browser" in title:
-                    self.log("🛡 Cloudflare Verification Active. Bypassing...")
-                    time.sleep(2)
-                else:
-                    break
+            time.sleep(3)
 
             try:
                 e_field = self.driver.find_element(By.CSS_SELECTOR, 'input[type="email"], input[name="email"], input[name="username"]')
@@ -493,24 +447,10 @@ class IvaSMSScraperApp:
                 """)
 
                 if reloaded:
-                    self.log("⚡ In-place Table AJAX successfully reloaded (Session Preserved).")
+                    self.log("⚡ In-place Table AJAX successfully reloaded.")
                     return
 
-                btn_clicked = False
-                reload_icons = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='reload'], .fa-sync, .fa-refresh, i.fa-repeat, button[title*='refresh']")
-                for btn in reload_icons:
-                    if btn.is_displayed():
-                        try:
-                            self.driver.execute_script("arguments[0].click();", btn)
-                            btn_clicked = True
-                            self.log("🔘 Portal Live Reload button triggered.")
-                            break
-                        except Exception: pass
-
-                if not btn_clicked:
-                    self.driver.get(TARGET_URL)
-                    self.log("🌐 Navigated directly to TARGET_URL.")
-
+                self.driver.get(TARGET_URL)
                 time.sleep(2)
             except Exception as e:
                 self.log(f"⚠️ Safe reload notice: {e}")
@@ -520,7 +460,7 @@ class IvaSMSScraperApp:
             cur_url = self.driver.current_url
             if cur_url and "portal/live/my_sms" not in cur_url.lower():
                 if "ivasms.com" in cur_url.lower() and "portal/live/my_sms" not in cur_url.lower():
-                    self.log(f"⚠️ Wrong page detected ({cur_url}). Redirecting back to Live SMS...")
+                    self.log(f"⚠️ Wrong page detected ({cur_url}). Redirecting back...")
                     self.driver.get(TARGET_URL)
                     time.sleep(2)
         except Exception:
