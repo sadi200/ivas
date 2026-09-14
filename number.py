@@ -367,27 +367,26 @@ def check_user_membership(user_id):
 
 def send_verification_prompt(chat_id, msg_id=None):
     text = (
-    f"{PEM['warn']} <b>JOIN REQUIRED</b>\n"
-    f"━━━━━━━━━━━━━━━━━━\n\n"
-    f"🔐 <b>Welcome to our community!</b>\n\n"
-    f"Bot ব্যবহার করতে হলে প্রথমে আমাদের দু’টি গ্রুপে Join করতে হবে।\n\n"
-    f"📲 <b>Step 1:</b> OTP Group-এ Join করুন\n"
-    f"🛠 <b>Step 2:</b> Method Group-এ Join করুন\n\n"
-    f"━━━━━━━━━━━━━━━━━━\n"
-    f"✨ Join করা শেষ হলে নিচের <b>Verify</b> button-এ click করুন।"
-)
-
-kb = {
-    "inline_keyboard": [
-        [
-            {"text": "📲 OTP Group", "url": "https://t.me/frndotp"},
-            {"text": "🛠 Method Group", "url": "https://t.me/msmethod"}
-        ],
-        [
-            {"text": "✅ Verify", "callback_data": "check_join"}
+        f"{PEM['warn']} <b>JOIN REQUIRED</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"🔐 <b>Welcome to our community!</b>\n\n"
+        f"Bot ব্যবহার করতে হলে প্রথমে আমাদের দু’টি গ্রুপে Join করতে হবে।\n\n"
+        f"📲 <b>Step 1:</b> OTP Group-এ Join করুন\n"
+        f"🛠 <b>Step 2:</b> Method Group-এ Join করুন\n\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"✨ Join করা শেষ হলে নিচের <b>Verify</b> button-এ click করুন।"
+    )
+    kb = {
+        "inline_keyboard": [
+            [
+                {"text": "📲 OTP Group", "url": "https://t.me/frndotp"},
+                {"text": "🛠 Method Group", "url": "https://t.me/msmethod"}
+            ],
+            [
+                {"text": f"{PEM['ok']} Verify", "icon_custom_emoji_id": "5352694861990501856", "callback_data": "check_join"}
+            ]
         ]
-    ]
-}
+    }
     if msg_id:
         edit_msg(chat_id, msg_id, text, reply_markup=kb)
     else:
@@ -633,7 +632,7 @@ def generate_leaderboard_text(tab):
 
     if tab == "today":
         header_title = "🌟 TODAY'S LIVE LEADERBOARD (ADMIN)"
-        subtitle = "<i>(প্রতিদিন সকাল ৬:০০ টায় অটো রিসেট হয়)</i>"
+        subtitle = "<i>(প্রতিদিন সকাল ৬:০০ টায় অটো রিসেট হয়)</i>"
         for uid, u in all_users.items():
             otps = int(u.get("today_otps", 0))
             amt = float(u.get("today_earnings", 0.0))
@@ -678,13 +677,13 @@ def generate_leaderboard_text(tab):
 ╚══════════════════════════╝\n\n"""
 
     if not ranking_data:
-        txt += "ℹ️ <i>এই সময়কালের মধ্যে এখনো কোনো রেকর্ড নেই!</i>\n"
+        txt += "ℹ️ <i>এই সময়কালের মধ্যে এখনো কোনো রেকর্ড নেই!</i>\n"
     else:
         for idx, item in enumerate(ranking_data[:10]):
             badge = medals[idx] if idx < len(medals) else "👤"
             u_tag = f"@{item['username']}" if item['username'] else f"<code>{item['uid']}</code>"
             txt += f"<b>{badge} {u_tag}</b>\n"
-            txt += f"   🔐 OTP: <b>{item['otps']}</b> টি | 💰 Earned: <b>{item['amt']:.2f} BDT</b>\n"
+            txt += f"    🔐 OTP: <b>{item['otps']}</b> টি | 💰 Earned: <b>{item['amt']:.2f} BDT</b>\n"
             txt += "──────────────────────────\n"
 
     return txt
@@ -1089,7 +1088,7 @@ def handle_message(msg):
         bot_name = bot_info.get("username", "YourBot")
         ref_link = f"https://t.me/{bot_name}?start=ref_{sender_id}"
         all_u = get_all_users_from_file()
-        my_refs = [uid for uid, dat in all_u.items() if dat.get("referred_by") == str(sender_id)]
+        my_refs = [uid for uid, dat in all_u.items() if dat.get("referred_by"] == str(sender_id)] if False else [uid for uid, dat in all_u.items() if dat.get("referred_by") == str(sender_id)]
         
         msg_text = f"""━━━━━━━━━━━━━━━━━━
 {PEM['user']} <b>USER PROFILE</b>
@@ -1201,8 +1200,8 @@ def handle_callback(call):
         api_call("answerCallbackQuery", {"callback_query_id": call_id, "text": "⚠️ Slow down!", "show_alert": False})
         return
 
-    # Check subscription for callbacks except close, cancel_state, check_subscription
-    bypass_callbacks = ["check_subscription", "close", "cancel_state"]
+    # Check subscription for callbacks except close, cancel_state, check_join
+    bypass_callbacks = ["check_join", "close", "cancel_state"]
     if not is_admin(from_user_id) and data not in bypass_callbacks:
         if not check_user_membership(from_user_id):
             api_call("answerCallbackQuery", {"callback_query_id": call_id, "text": "❌ Aghe group-e join kore Verify korun!", "show_alert": True})
@@ -1211,7 +1210,7 @@ def handle_callback(call):
 
     api_call("answerCallbackQuery", {"callback_query_id": call_id})
 
-    if data == "check_subscription":
+    if data == "check_join":
         if check_user_membership(from_user_id):
             delete_msg(chat_id, msg_id)
             send_msg(chat_id, f"{PEM['ok']} <b>Verification Successful!</b>\nEkhon apni bot use korte parben:", reply_markup=main_kb(from_user_id))
