@@ -1,5 +1,40 @@
-import os
+import sys
+from types import ModuleType
 import re
+
+# Python 3.12+ distutils compatibility fix for undetected_chromedriver
+try:
+    from distutils.version import LooseVersion
+except (ImportError, ModuleNotFoundError):
+    distutils_mod = ModuleType('distutils')
+    distutils_version_mod = ModuleType('distutils.version')
+    
+    class LooseVersion:
+        def __init__(self, vstring=None):
+            self.vstring = str(vstring) if vstring else ""
+        def __str__(self):
+            return self.vstring
+        def _parse(self, v):
+            return [int(x) if x.isdigit() else x for x in re.findall(r'\d+|[a-zA-Z]+', v)]
+        def __lt__(self, other):
+            return self._parse(self.vstring) < self._parse(str(other))
+        def __le__(self, other):
+            return self._parse(self.vstring) <= self._parse(str(other))
+        def __gt__(self, other):
+            return self._parse(self.vstring) > self._parse(str(other))
+        def __ge__(self, other):
+            return self._parse(self.vstring) >= self._parse(str(other))
+        def __eq__(self, other):
+            return self._parse(self.vstring) == self._parse(str(other))
+        def __ne__(self, other):
+            return self._parse(self.vstring) != self._parse(str(other))
+
+    distutils_version_mod.LooseVersion = LooseVersion
+    distutils_mod.version = distutils_version_mod
+    sys.modules['distutils'] = distutils_mod
+    sys.modules['distutils.version'] = distutils_version_mod
+
+import os
 import json
 import time
 import random
@@ -194,7 +229,6 @@ def find_number_owner_fast(clean_digits):
 
 # ================= Financial & Live Range Helpers =================
 def calculate_weekly_revenue(users_file):
-    """হিসাব করে টোটাল এবং উইকলি রেভিনিউ রেঞ্জ"""
     if not os.path.exists(users_file):
         return 0.0, 0.0
     try:
@@ -215,7 +249,6 @@ def calculate_weekly_revenue(users_file):
         return 0.0, 0.0
 
 def get_user_live_financials(uid):
-    """ইউজারের লাইভ ব্যালেন্স, আজকের এবং মোট আয় রিটার্ন করে"""
     uid_str = str(uid).strip()
     if os.path.exists(USERS_FILE):
         try:
@@ -310,7 +343,6 @@ class IvaSMSScraperApp:
         self.title_label = ctk.CTkLabel(root, text="IvaSMS Live Monitor Engine (Anti-Redirect)", font=ctk.CTkFont(size=20, weight="bold"))
         self.title_label.pack(pady=10)
 
-        # Dashboard Live Stats Frame
         self.stats_frame = ctk.CTkFrame(root)
         self.stats_frame.pack(pady=5, padx=20, fill="x")
         
@@ -617,8 +649,6 @@ class IvaSMSScraperApp:
                     return
 
                 new_balance = add_balance_fast(owner_id, otp_rate)
-                
-                # Fetch live updated financials for target user
                 u_bal, u_today, u_total, u_otps = get_user_live_financials(owner_id)
                 
                 user_card = (
