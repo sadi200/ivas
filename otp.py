@@ -1,40 +1,5 @@
-import sys
-from types import ModuleType
-import re
-
-# Python 3.12+ distutils compatibility fix for undetected_chromedriver
-try:
-    from distutils.version import LooseVersion
-except (ImportError, ModuleNotFoundError):
-    distutils_mod = ModuleType('distutils')
-    distutils_version_mod = ModuleType('distutils.version')
-    
-    class LooseVersion:
-        def __init__(self, vstring=None):
-            self.vstring = str(vstring) if vstring else ""
-        def __str__(self):
-            return self.vstring
-        def _parse(self, v):
-            return [int(x) if x.isdigit() else x for x in re.findall(r'\d+|[a-zA-Z]+', v)]
-        def __lt__(self, other):
-            return self._parse(self.vstring) < self._parse(str(other))
-        def __le__(self, other):
-            return self._parse(self.vstring) <= self._parse(str(other))
-        def __gt__(self, other):
-            return self._parse(self.vstring) > self._parse(str(other))
-        def __ge__(self, other):
-            return self._parse(self.vstring) >= self._parse(str(other))
-        def __eq__(self, other):
-            return self._parse(self.vstring) == self._parse(str(other))
-        def __ne__(self, other):
-            return self._parse(self.vstring) != self._parse(str(other))
-
-    distutils_version_mod.LooseVersion = LooseVersion
-    distutils_mod.version = distutils_version_mod
-    sys.modules['distutils'] = distutils_mod
-    sys.modules['distutils.version'] = distutils_version_mod
-
 import os
+import re
 import json
 import time
 import random
@@ -42,7 +7,7 @@ import shutil
 import requests
 import threading
 import subprocess
-from datetime import datetime, timedelta
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 import customtkinter as ctk
 from tkinter import messagebox
@@ -227,45 +192,6 @@ def find_number_owner_fast(clean_digits):
             pass
     return None, "", 5.0
 
-# ================= Financial & Live Range Helpers =================
-def calculate_weekly_revenue(users_file):
-    if not os.path.exists(users_file):
-        return 0.0, 0.0
-    try:
-        with open(users_file, "r", encoding="utf-8") as f:
-            users = json.load(f)
-        
-        total_all_time = 0.0
-        today_total = 0.0
-        today_str = datetime.now().strftime('%Y-%m-%d')
-        
-        for uid, data in users.items():
-            total_all_time += float(data.get("total_earnings", 0.0))
-            if data.get("last_active_date") == today_str:
-                today_total += float(data.get("today_earnings", 0.0))
-                
-        return today_total, total_all_time
-    except Exception:
-        return 0.0, 0.0
-
-def get_user_live_financials(uid):
-    uid_str = str(uid).strip()
-    if os.path.exists(USERS_FILE):
-        try:
-            with open(USERS_FILE, "r", encoding="utf-8") as f:
-                users = json.load(f)
-                if uid_str in users:
-                    u_data = users[uid_str]
-                    return (
-                        float(u_data.get("balance", 0.0)),
-                        float(u_data.get("today_earnings", 0.0)),
-                        float(u_data.get("total_earnings", 0.0)),
-                        int(u_data.get("total_otps", 0))
-                    )
-        except Exception:
-            pass
-    return 0.0, 0.0, 0.0, 0.0
-
 def add_balance_fast(uid, reward_amount):
     uid_str = str(uid).strip()
     today = datetime.now().strftime('%Y-%m-%d')
@@ -330,7 +256,7 @@ class IvaSMSScraperApp:
     def __init__(self, root):
         self.root = root
         self.root.title("IvaSMS Scalable Monitor (Anti-Redirect & Captcha Safe)")
-        self.root.geometry("670x720")
+        self.root.geometry("670x650")
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
 
@@ -341,13 +267,7 @@ class IvaSMSScraperApp:
         self.idle_refresh_seconds = 300
 
         self.title_label = ctk.CTkLabel(root, text="IvaSMS Live Monitor Engine (Anti-Redirect)", font=ctk.CTkFont(size=20, weight="bold"))
-        self.title_label.pack(pady=10)
-
-        self.stats_frame = ctk.CTkFrame(root)
-        self.stats_frame.pack(pady=5, padx=20, fill="x")
-        
-        self.live_rev_lbl = ctk.CTkLabel(self.stats_frame, text="📅 Today Rev: 0.00 BDT | 📊 Weekly Range: Active", font=ctk.CTkFont(size=12, weight="bold"), text_color="#00ffcc")
-        self.live_rev_lbl.pack(pady=6)
+        self.title_label.pack(pady=12)
 
         self.btn_frame = ctk.CTkFrame(root)
         self.btn_frame.pack(pady=5, padx=20, fill="x")
@@ -381,12 +301,11 @@ class IvaSMSScraperApp:
         self.counter_label = ctk.CTkLabel(root, text="Total SMS Processed: 0", text_color="green", font=ctk.CTkFont(size=16, weight="bold"))
         self.counter_label.pack(pady=2)
 
-        self.log_box = ctk.CTkTextbox(root, width=620, height=210, font=("Consolas", 12))
-        self.log_box.pack(pady=8, padx=20)
+        self.log_box = ctk.CTkTextbox(root, width=620, height=230, font=("Consolas", 12))
+        self.log_box.pack(pady=10, padx=20)
         self.log("Click 'Open Chrome & Login' -> Sign in -> Click 'Start Monitoring'")
 
         self.start_timer_updater()
-        self.start_revenue_updater()
 
     def on_dropdown_change(self, choice):
         if choice == "OFF":
@@ -410,18 +329,6 @@ class IvaSMSScraperApp:
                     else:
                         self.root.after(0, lambda: self.timer_display_lbl.configure(text="Disabled", text_color="gray"))
                 time.sleep(1)
-        threading.Thread(target=loop, daemon=True).start()
-
-    def start_revenue_updater(self):
-        def loop():
-            while True:
-                try:
-                    today_rev, total_rev = calculate_weekly_revenue(USERS_FILE)
-                    rev_text = f"📅 Today Rev: {today_rev:.2f} BDT | 📈 Total / Weekly Range Tracker: Active"
-                    self.root.after(0, lambda t=rev_text: self.live_rev_lbl.configure(text=t))
-                except Exception:
-                    pass
-                time.sleep(3)
         threading.Thread(target=loop, daemon=True).start()
 
     def log(self, text):
@@ -525,6 +432,7 @@ class IvaSMSScraperApp:
         self.stop_btn.configure(state="disabled")
         self.log("Monitoring stopped.")
 
+    # ================= Safe In-Place Auto-Refresh Engine =================
     def check_idle_and_refresh(self):
         if self.idle_refresh_seconds <= 0: return
         current_time = time.time()
@@ -532,6 +440,8 @@ class IvaSMSScraperApp:
             self.last_otp_time = time.time()
             try:
                 self.log("🔄 Inactivity detected. Executing session-safe reload...")
+                
+                # 1. চেক করুন পেজ এখনো লাইভ এসএমএস পেজেই আছে কিনা
                 cur_url = self.driver.current_url.lower()
                 if "portal/live/my_sms" not in cur_url:
                     self.log("⚠️ Redirect detected! Returning directly to Live SMS URL...")
@@ -539,12 +449,15 @@ class IvaSMSScraperApp:
                     time.sleep(2.5)
                     return
 
+                # 2. পেজ পুরো রিলোড না দিয়ে DataTables AJAX বা পোর্টাল টেবিল রিলোড করা (Zero Captcha Risk)
                 reloaded = self.driver.execute_script("""
                     if (window.jQuery) {
+                        // DataTables instance reload
                         if (jQuery.fn.dataTable && jQuery.fn.dataTable.isDataTable('table')) {
                             jQuery('table').DataTable().ajax.reload(null, false);
                             return true;
                         }
+                        // Table container trigger
                         if (jQuery('.table').length > 0) {
                             jQuery('.table').trigger('reload');
                         }
@@ -556,6 +469,7 @@ class IvaSMSScraperApp:
                     self.log("⚡ In-place Table AJAX successfully reloaded (Session Preserved).")
                     return
 
+                # 3. পোর্টালের নির্দিষ্ট রিলোড আইকন থাকলে ক্লিক করা
                 btn_clicked = False
                 reload_icons = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='reload'], .fa-sync, .fa-refresh, i.fa-repeat, button[title*='refresh']")
                 for btn in reload_icons:
@@ -567,6 +481,7 @@ class IvaSMSScraperApp:
                             break
                         except Exception: pass
 
+                # 4. যদি কোনো বাটন না থাকে তবে সরাসরি টার্গেট ইউআরএল নিরাপদ লোড
                 if not btn_clicked:
                     self.driver.get(TARGET_URL)
                     self.log("🌐 Navigated directly to TARGET_URL.")
@@ -575,10 +490,12 @@ class IvaSMSScraperApp:
             except Exception as e:
                 self.log(f"⚠️ Safe reload notice: {e}")
 
+    # ================= Watchdog: ভুল লিঙ্কে গেলে সাথে সাথে ফিরিয়ে আনা =================
     def ensure_correct_url(self):
         try:
             cur_url = self.driver.current_url
             if cur_url and "portal/live/my_sms" not in cur_url.lower():
+                # যদি ভুল করে হোমপেজ বা লগইনে চলে যায়
                 if "ivasms.com" in cur_url.lower() and "portal/live/my_sms" not in cur_url.lower():
                     self.log(f"⚠️ Wrong page detected ({cur_url}). Redirecting back to Live SMS...")
                     self.driver.get(TARGET_URL)
@@ -649,19 +566,16 @@ class IvaSMSScraperApp:
                     return
 
                 new_balance = add_balance_fast(owner_id, otp_rate)
-                u_bal, u_today, u_total, u_otps = get_user_live_financials(owner_id)
-                
                 user_card = (
                     f"╔ {srv_icon} {srv_name} {country_flag} {lang_code} [PAID]\n"
                     f"╠ 📱 <code>+{clean_num}</code>\n"
                     f"╠ 🎁 <b>Reward:</b> <code>+{otp_rate:.2f} BDT</code>\n"
-                    f"╠ 💰 <b>Live Balance:</b> <code>{u_bal:.2f} BDT</code>\n"
-                    f"╠ 📊 <b>Today Earn:</b> <code>{u_today:.2f} BDT</code>\n"
+                    f"╠ 💰 <b>Balance:</b> <code>{new_balance:.2f} BDT</code>\n"
                     f"╚ 💬 <b>MS :</b>\n<code>{safe_sms_text}</code>"
                 )
                 user_kb = {"inline_keyboard": [
                     [{"text": f"🔑 {otp}", "icon_custom_emoji_id": "5353022963132174959", "copy_text": {"text": otp}, "style": "success"}],
-                    [{"text": f"💰 Balance: {u_bal:.2f} BDT", "icon_custom_emoji_id": "5190576863226933563", "callback_data": "balance_info", "style": "primary"}]
+                    [{"text": f"💰 Balance: {new_balance:.2f} BDT", "icon_custom_emoji_id": "5190576863226933563", "callback_data": "balance_info", "style": "primary"}]
                 ]}
                 send_telegram_msg_async(owner_id, user_card, user_kb)
                 self.log(f"✅ User ID {owner_id} credited (Bal: {new_balance:.2f} BDT)")
