@@ -12,7 +12,6 @@ import customtkinter as ctk
 from tkinter import messagebox
 
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import StaleElementReferenceException
@@ -378,10 +377,25 @@ class IvaSMSScraperApp:
             options.add_argument(f"--user-data-dir={CHROME_PROFILE}")
             options.add_argument("--disable-dev-shm-usage")
             options.add_argument("--no-sandbox")
+            
+            options.add_argument("--disable-blink-features=AutomationControlled")
+            options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            options.add_experimental_option('useAutomationExtension', False)
 
             self.driver = webdriver.Chrome(options=options)
+            
+            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+
             self.driver.get(TARGET_URL)
-            time.sleep(3)
+            self.log("🌐 Page opened. If Cloudflare verification appears, please click 'Verify you are human' manually in the browser window!")
+            
+            for i in range(30):
+                time.sleep(1)
+                title = self.driver.title.lower()
+                cur_url = self.driver.current_url.lower()
+                if "portal/live/my_sms" in cur_url and "just a moment" not in title:
+                    self.log("✅ Cloudflare passed successfully!")
+                    break
 
             try:
                 e_field = self.driver.find_element(By.CSS_SELECTOR, 'input[type="email"], input[name="email"], input[name="username"]')
@@ -390,7 +404,7 @@ class IvaSMSScraperApp:
                 e_field.send_keys(LOGIN_EMAIL)
                 p_field.clear()
                 p_field.send_keys(LOGIN_PASSWORD)
-                self.log("Credentials auto-filled. Complete sign in.")
+                self.log("Credentials auto-filled. Complete sign in if needed.")
             except Exception:
                 pass
 
