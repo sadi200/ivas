@@ -349,6 +349,46 @@ def send_document(chat_id, file_path, caption=None):
             time.sleep(2)
     return {}
 
+# ================= Forced Subscription / Join Verification =================
+def check_user_membership(user_id):
+    channels = ["@frndotp", "@msmethod"]
+    for ch in channels:
+        try:
+            res = api_call("getChatMember", {"chat_id": ch, "user_id": user_id})
+            if res.get("ok"):
+                status = res.get("result", {}).get("status")
+                if status not in ["member", "administrator", "creator"]:
+                    return False
+            else:
+                return False
+        except Exception:
+            return False
+    return True
+
+def send_verification_prompt(chat_id, msg_id=None):
+    text = (
+        f"{PEM['warn']} <b>Join Required!</b>\n\n"
+        f"Bot ti use korar jonno oboshshoi amader duiti group-e join korte hobe:\n\n"
+        f"1️⃣ {PEM['link']} OTP Group: <a href='https://t.me/frndotp'>t.me/frndotp</a>\n"
+        f"2️⃣ {PEM['link']} Method Group: <a href='https://t.me/msmethod'>t.me/msmethod</a>\n\n"
+        f"<i>Join kora sesh hole nicher <b>'Verify'</b> button-e click korun!</i>"
+    )
+    kb = {
+        "inline_keyboard": [
+            [
+                {"text": "OTP Group", "url": "https://t.me/frndotp"},
+                {"text": "Method Group", "url": "https://t.me/msmethod"}
+            ],
+            [
+                {"text": "Verify Join", "icon_custom_emoji_id": "5352694861990501856", "callback_data": "check_subscription", "style": "success"}
+            ]
+        ]
+    }
+    if msg_id:
+        edit_msg(chat_id, msg_id, text, reply_markup=kb)
+    else:
+        send_msg(chat_id, text, reply_markup=kb)
+
 # ================= Anti-Spam Protection =================
 def is_spamming(user_id):
     if is_admin(user_id):
@@ -710,6 +750,12 @@ def handle_message(msg):
 
     get_user(sender_id, username=username)
 
+    # Forced Subscription Check for normal users
+    if not is_admin(sender_id) and not text.startswith("/start"):
+        if not check_user_membership(sender_id):
+            send_verification_prompt(chat_id)
+            return
+
     if text in ["/id", "/myid"]:
         send_msg(chat_id, f"🆔 Apnar Telegram ID: <code>{sender_id}</code>\nAdmin Status: <b>{'✅ Yes' if is_admin(sender_id) else '❌ No'}</b>")
         return
@@ -997,6 +1043,11 @@ def handle_message(msg):
                     users[str(sender_id)]["referred_by"] = inviter_uid
                     save_all_users_to_file(users)
 
+        # Check membership on /start
+        if not is_admin(sender_id) and not check_user_membership(sender_id):
+            send_verification_prompt(chat_id)
+            return
+
         send_msg(chat_id, f"{PEM['hi']} <b>Welcome!</b> Menu theke service select korun:", reply_markup=main_kb(sender_id))
 
     elif "GET NUMBER" in text:
@@ -1146,9 +1197,24 @@ def handle_callback(call):
         api_call("answerCallbackQuery", {"callback_query_id": call_id, "text": "⚠️ Slow down!", "show_alert": False})
         return
 
+    # Check subscription for callbacks except close, cancel_state, check_subscription
+    bypass_callbacks = ["check_subscription", "close", "cancel_state"]
+    if not is_admin(from_user_id) and data not in bypass_callbacks:
+        if not check_user_membership(from_user_id):
+            api_call("answerCallbackQuery", {"callback_query_id": call_id, "text": "❌ Aghe group-e join kore Verify korun!", "show_alert": True})
+            send_verification_prompt(chat_id, msg_id)
+            return
+
     api_call("answerCallbackQuery", {"callback_query_id": call_id})
 
-    if data == "close":
+    if data == "check_subscription":
+        if check_user_membership(from_user_id):
+            delete_msg(chat_id, msg_id)
+            send_msg(chat_id, f"{PEM['ok']} <b>Verification Successful!</b>\nEkhon apni bot use korte parben:", reply_markup=main_kb(from_user_id))
+        else:
+            api_call("answerCallbackQuery", {"callback_query_id": call_id, "text": "❌ Apni shob gulo group-e join করেননি! Aghe join korun.", "show_alert": True})
+
+    elif data == "close":
         delete_msg(chat_id, msg_id)
 
     elif data == "cancel_state":
@@ -1612,7 +1678,7 @@ def handle_callback(call):
 def main():
     offset = None
     executor = ThreadPoolExecutor(max_workers=50)
-    print("🤖 Bot Controller Engine (Verified Admin Access + Copyable Numbers) Running...")
+    print("🤖 Bot Controller Engine (Verified Admin Access + Forced Subscription) Running...")
     while True:
         try:
             updates = api_call("getUpdates", {"timeout": 30, "offset": offset})
