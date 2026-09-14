@@ -367,23 +367,27 @@ def check_user_membership(user_id):
 
 def send_verification_prompt(chat_id, msg_id=None):
     text = (
-        f"{PEM['warn']} <b>Join Required!</b>\n\n"
-        f"Bot ti use korar jonno oboshshoi amader duiti group-e join korte hobe:\n\n"
-        f"1️⃣ {PEM['link']} OTP Group: <a href='https://t.me/frndotp'>t.me/frndotp</a>\n"
-        f"2️⃣ {PEM['link']} Method Group: <a href='https://t.me/msmethod'>t.me/msmethod</a>\n\n"
-        f"<i>Join kora sesh hole nicher <b>'Verify'</b> button-e click korun!</i>"
-    )
-    kb = {
-        "inline_keyboard": [
-            [
-                {"text": "OTP Group", "url": "https://t.me/frndotp"},
-                {"text": "Method Group", "url": "https://t.me/msmethod"}
-            ],
-            [
-                {"text": "Verify Join", "icon_custom_emoji_id": "5352694861990501856", "callback_data": "check_subscription", "style": "success"}
-            ]
+    f"{PEM['warn']} <b>JOIN REQUIRED</b>\n"
+    f"━━━━━━━━━━━━━━━━━━\n\n"
+    f"🔐 <b>Welcome to our community!</b>\n\n"
+    f"Bot ব্যবহার করতে হলে প্রথমে আমাদের দু’টি গ্রুপে Join করতে হবে।\n\n"
+    f"📲 <b>Step 1:</b> OTP Group-এ Join করুন\n"
+    f"🛠 <b>Step 2:</b> Method Group-এ Join করুন\n\n"
+    f"━━━━━━━━━━━━━━━━━━\n"
+    f"✨ Join করা শেষ হলে নিচের <b>Verify</b> button-এ click করুন।"
+)
+
+kb = {
+    "inline_keyboard": [
+        [
+            {"text": "📲 OTP Group", "url": "https://t.me/frndotp"},
+            {"text": "🛠 Method Group", "url": "https://t.me/msmethod"}
+        ],
+        [
+            {"text": "✅ Verify", "callback_data": "check_join"}
         ]
-    }
+    ]
+}
     if msg_id:
         edit_msg(chat_id, msg_id, text, reply_markup=kb)
     else:
