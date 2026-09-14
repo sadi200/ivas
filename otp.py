@@ -2,18 +2,18 @@ import os
 import re
 import json
 import time
+import random
 import shutil
 import requests
 import threading
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 import customtkinter as ctk
 from tkinter import messagebox
-
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import StaleElementReferenceException
 
 BOT_TOKEN = "8867778383:AAGKHcZdr4mA7bX2Tl4AO_LOrqjelOlTqt4"
@@ -192,45 +192,53 @@ def find_number_owner_fast(clean_digits):
             pass
     return None, "", 5.0
 
-def add_balance_fast(uid, reward_amount, range_name=""):
+# ================= Financial & Live Range Helpers =================
+def calculate_weekly_revenue(users_file):
+    """হিসাব করে টোটাল এবং উইকলি রেভিনিউ রেঞ্জ"""
+    if not os.path.exists(users_file):
+        return 0.0, 0.0
+    try:
+        with open(users_file, "r", encoding="utf-8") as f:
+            users = json.load(f)
+        
+        total_all_time = 0.0
+        today_total = 0.0
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        
+        for uid, data in users.items():
+            total_all_time += float(data.get("total_earnings", 0.0))
+            if data.get("last_active_date") == today_str:
+                today_total += float(data.get("today_earnings", 0.0))
+                
+        return today_total, total_all_time
+    except Exception:
+        return 0.0, 0.0
+
+def get_user_live_financials(uid):
+    """ইউজারের লাইভ ব্যালেন্স, আজকের এবং মোট আয় রিটার্ন করে"""
+    uid_str = str(uid).strip()
+    if os.path.exists(USERS_FILE):
+        try:
+            with open(USERS_FILE, "r", encoding="utf-8") as f:
+                users = json.load(f)
+                if uid_str in users:
+                    u_data = users[uid_str]
+                    return (
+                        float(u_data.get("balance", 0.0)),
+                        float(u_data.get("today_earnings", 0.0)),
+                        float(u_data.get("total_earnings", 0.0)),
+                        int(u_data.get("total_otps", 0))
+                    )
+        except Exception:
+            pass
+    return 0.0, 0.0, 0.0, 0.0
+
+def add_balance_fast(uid, reward_amount):
     uid_str = str(uid).strip()
     today = datetime.now().strftime('%Y-%m-%d')
     reward = float(reward_amount)
 
     with db_lock:
-        db_data = {}
-        if os.path.exists(DB_FILE):
-            try:
-                with open(DB_FILE, "r", encoding="utf-8") as f:
-                    db_data = json.load(f)
-            except Exception:
-                pass
-
-        if "daily_system_earnings" not in db_data: db_data["daily_system_earnings"] = {}
-        if "user_period_stats" not in db_data: db_data["user_period_stats"] = {}
-        if "range_traffic_otps" not in db_data: db_data["range_traffic_otps"] = {}
-
-        if range_name:
-            current_hits = int(db_data["range_traffic_otps"].get(range_name, 0))
-            db_data["range_traffic_otps"][range_name] = current_hits + 1
-
-        if today not in db_data["daily_system_earnings"]:
-            db_data["daily_system_earnings"][today] = {"amount": 0.0, "otps": 0}
-        db_data["daily_system_earnings"][today]["amount"] = round(db_data["daily_system_earnings"][today]["amount"] + reward, 2)
-        db_data["daily_system_earnings"][today]["otps"] += 1
-
-        if today not in db_data["user_period_stats"]: db_data["user_period_stats"][today] = {}
-        if uid_str not in db_data["user_period_stats"][today]:
-            db_data["user_period_stats"][today][uid_str] = {"otps": 0, "amount": 0.0}
-        db_data["user_period_stats"][today][uid_str]["amount"] = round(db_data["user_period_stats"][today][uid_str]["amount"] + reward, 2)
-        db_data["user_period_stats"][today][uid_str]["otps"] += 1
-
-        try:
-            with open(DB_FILE, "w", encoding="utf-8") as bf:
-                json.dump(db_data, bf, indent=2, ensure_ascii=False)
-        except Exception as e:
-            print(f"Error updating bot_data from scraper: {e}")
-
         users = {}
         if os.path.exists(USERS_FILE):
             try:
@@ -288,8 +296,8 @@ def add_balance_fast(uid, reward_amount, range_name=""):
 class IvaSMSScraperApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("IvaSMS Standard Selenium Monitor")
-        self.root.geometry("670x650")
+        self.root.title("IvaSMS Scalable Monitor (Anti-Redirect & Captcha Safe)")
+        self.root.geometry("670x720")
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
 
@@ -299,8 +307,15 @@ class IvaSMSScraperApp:
         self.last_otp_time = time.time()
         self.idle_refresh_seconds = 300
 
-        self.title_label = ctk.CTkLabel(root, text="IvaSMS Live Monitor Engine (Selenium)", font=ctk.CTkFont(size=20, weight="bold"))
-        self.title_label.pack(pady=12)
+        self.title_label = ctk.CTkLabel(root, text="IvaSMS Live Monitor Engine (Anti-Redirect)", font=ctk.CTkFont(size=20, weight="bold"))
+        self.title_label.pack(pady=10)
+
+        # Dashboard Live Stats Frame
+        self.stats_frame = ctk.CTkFrame(root)
+        self.stats_frame.pack(pady=5, padx=20, fill="x")
+        
+        self.live_rev_lbl = ctk.CTkLabel(self.stats_frame, text="📅 Today Rev: 0.00 BDT | 📊 Weekly Range: Active", font=ctk.CTkFont(size=12, weight="bold"), text_color="#00ffcc")
+        self.live_rev_lbl.pack(pady=6)
 
         self.btn_frame = ctk.CTkFrame(root)
         self.btn_frame.pack(pady=5, padx=20, fill="x")
@@ -334,11 +349,12 @@ class IvaSMSScraperApp:
         self.counter_label = ctk.CTkLabel(root, text="Total SMS Processed: 0", text_color="green", font=ctk.CTkFont(size=16, weight="bold"))
         self.counter_label.pack(pady=2)
 
-        self.log_box = ctk.CTkTextbox(root, width=620, height=230, font=("Consolas", 12))
-        self.log_box.pack(pady=10, padx=20)
+        self.log_box = ctk.CTkTextbox(root, width=620, height=210, font=("Consolas", 12))
+        self.log_box.pack(pady=8, padx=20)
         self.log("Click 'Open Chrome & Login' -> Sign in -> Click 'Start Monitoring'")
 
         self.start_timer_updater()
+        self.start_revenue_updater()
 
     def on_dropdown_change(self, choice):
         if choice == "OFF":
@@ -364,37 +380,81 @@ class IvaSMSScraperApp:
                 time.sleep(1)
         threading.Thread(target=loop, daemon=True).start()
 
+    def start_revenue_updater(self):
+        def loop():
+            while True:
+                try:
+                    today_rev, total_rev = calculate_weekly_revenue(USERS_FILE)
+                    rev_text = f"📅 Today Rev: {today_rev:.2f} BDT | 📈 Total / Weekly Range Tracker: Active"
+                    self.root.after(0, lambda t=rev_text: self.live_rev_lbl.configure(text=t))
+                except Exception:
+                    pass
+                time.sleep(3)
+        threading.Thread(target=loop, daemon=True).start()
+
     def log(self, text):
         timestamp = datetime.now().strftime('%H:%M:%S')
         self.log_box.insert("end", f"[{timestamp}] {text}\n")
         self.log_box.see("end")
 
+    def find_chrome(self):
+        paths = ["/usr/bin/google-chrome-stable", "/usr/bin/google-chrome", "/snap/bin/chromium", "/usr/bin/chromium-browser"]
+        for p in paths:
+            if os.path.exists(p): return p
+        try:
+            res = subprocess.run(['which', 'google-chrome-stable'], capture_output=True, text=True)
+            if res.returncode == 0: return res.stdout.strip()
+        except Exception: pass
+        return None
+
+    def get_chrome_version_main(self):
+        chrome_bin = self.find_chrome()
+        if chrome_bin:
+            try:
+                output = subprocess.check_output([chrome_bin, "--version"]).decode("utf-8")
+                match = re.search(r'(\d+)\.', output)
+                if match:
+                    return int(match.group(1))
+            except Exception:
+                pass
+        return 149
+
     def start_browser(self):
         try:
             self.status_label.configure(text="Status: Launching Chrome...", text_color="orange")
-            options = Options()
+            cache_path = os.path.expanduser("~/.local/share/undetected_chromedriver")
+            if os.path.exists(cache_path):
+                try: shutil.rmtree(cache_path)
+                except Exception: pass
+
+            chrome_bin = self.find_chrome()
+            options = uc.ChromeOptions()
+            if chrome_bin:
+                options.binary_location = chrome_bin
+
             options.add_argument("--start-maximized")
             options.add_argument(f"--user-data-dir={CHROME_PROFILE}")
-            options.add_argument("--disable-dev-shm-usage")
             options.add_argument("--no-sandbox")
-            
-            options.add_argument("--disable-blink-features=AutomationControlled")
-            options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            options.add_experimental_option('useAutomationExtension', False)
+            options.add_argument("--disable-dev-shm-usage")
+            options.add_argument("--disable-popup-blocking")
 
-            self.driver = webdriver.Chrome(options=options)
-            
-            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            v_main = self.get_chrome_version_main()
+            self.log(f"Detected Chrome Major Version: {v_main}")
+
+            try:
+                self.driver = uc.Chrome(options=options, version_main=v_main)
+            except Exception:
+                self.driver = uc.Chrome(options=options, version_main=149)
 
             self.driver.get(TARGET_URL)
-            self.log("🌐 Page opened. If Cloudflare verification appears, please click 'Verify you are human' manually in the browser window!")
-            
-            for i in range(30):
-                time.sleep(1)
+            time.sleep(4)
+
+            for _ in range(10):
                 title = self.driver.title.lower()
-                cur_url = self.driver.current_url.lower()
-                if "portal/live/my_sms" in cur_url and "just a moment" not in title:
-                    self.log("✅ Cloudflare passed successfully!")
+                if "just a moment" in title or "checking your browser" in title:
+                    self.log("🛡 Cloudflare Verification Active. Bypassing...")
+                    time.sleep(2)
+                else:
                     break
 
             try:
@@ -404,7 +464,7 @@ class IvaSMSScraperApp:
                 e_field.send_keys(LOGIN_EMAIL)
                 p_field.clear()
                 p_field.send_keys(LOGIN_PASSWORD)
-                self.log("Credentials auto-filled. Complete sign in if needed.")
+                self.log("Credentials auto-filled. Complete sign in.")
             except Exception:
                 pass
 
@@ -461,10 +521,24 @@ class IvaSMSScraperApp:
                 """)
 
                 if reloaded:
-                    self.log("⚡ In-place Table AJAX successfully reloaded.")
+                    self.log("⚡ In-place Table AJAX successfully reloaded (Session Preserved).")
                     return
 
-                self.driver.get(TARGET_URL)
+                btn_clicked = False
+                reload_icons = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='reload'], .fa-sync, .fa-refresh, i.fa-repeat, button[title*='refresh']")
+                for btn in reload_icons:
+                    if btn.is_displayed():
+                        try:
+                            self.driver.execute_script("arguments[0].click();", btn)
+                            btn_clicked = True
+                            self.log("🔘 Portal Live Reload button triggered.")
+                            break
+                        except Exception: pass
+
+                if not btn_clicked:
+                    self.driver.get(TARGET_URL)
+                    self.log("🌐 Navigated directly to TARGET_URL.")
+
                 time.sleep(2)
             except Exception as e:
                 self.log(f"⚠️ Safe reload notice: {e}")
@@ -474,7 +548,7 @@ class IvaSMSScraperApp:
             cur_url = self.driver.current_url
             if cur_url and "portal/live/my_sms" not in cur_url.lower():
                 if "ivasms.com" in cur_url.lower() and "portal/live/my_sms" not in cur_url.lower():
-                    self.log(f"⚠️ Wrong page detected ({cur_url}). Redirecting back...")
+                    self.log(f"⚠️ Wrong page detected ({cur_url}). Redirecting back to Live SMS...")
                     self.driver.get(TARGET_URL)
                     time.sleep(2)
         except Exception:
@@ -542,17 +616,22 @@ class IvaSMSScraperApp:
                     self.log(f"🚫 Skipped User Delivery for +{clean_num} (UNPAID).")
                     return
 
-                new_balance = add_balance_fast(owner_id, otp_rate, range_name=range_name)
+                new_balance = add_balance_fast(owner_id, otp_rate)
+                
+                # Fetch live updated financials for target user
+                u_bal, u_today, u_total, u_otps = get_user_live_financials(owner_id)
+                
                 user_card = (
                     f"╔ {srv_icon} {srv_name} {country_flag} {lang_code} [PAID]\n"
                     f"╠ 📱 <code>+{clean_num}</code>\n"
                     f"╠ 🎁 <b>Reward:</b> <code>+{otp_rate:.2f} BDT</code>\n"
-                    f"╠ 💰 <b>Balance:</b> <code>{new_balance:.2f} BDT</code>\n"
+                    f"╠ 💰 <b>Live Balance:</b> <code>{u_bal:.2f} BDT</code>\n"
+                    f"╠ 📊 <b>Today Earn:</b> <code>{u_today:.2f} BDT</code>\n"
                     f"╚ 💬 <b>MS :</b>\n<code>{safe_sms_text}</code>"
                 )
                 user_kb = {"inline_keyboard": [
                     [{"text": f"🔑 {otp}", "icon_custom_emoji_id": "5353022963132174959", "copy_text": {"text": otp}, "style": "success"}],
-                    [{"text": f"💰 Balance: {new_balance:.2f} BDT", "icon_custom_emoji_id": "5190576863226933563", "callback_data": "balance_info", "style": "primary"}]
+                    [{"text": f"💰 Balance: {u_bal:.2f} BDT", "icon_custom_emoji_id": "5190576863226933563", "callback_data": "balance_info", "style": "primary"}]
                 ]}
                 send_telegram_msg_async(owner_id, user_card, user_kb)
                 self.log(f"✅ User ID {owner_id} credited (Bal: {new_balance:.2f} BDT)")
