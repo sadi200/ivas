@@ -3,6 +3,7 @@ import re
 import json
 import time
 import shutil
+import random
 import requests
 import threading
 import subprocess
@@ -14,6 +15,9 @@ from tkinter import messagebox
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import StaleElementReferenceException
 
 BOT_TOKEN = "8867778383:AAGKHcZdr4mA7bX2Tl4AO_LOrqjelOlTqt4"
@@ -369,6 +373,40 @@ class IvaSMSScraperApp:
         self.log_box.insert("end", f"[{timestamp}] {text}\n")
         self.log_box.see("end")
 
+    def handle_cloudflare_safely(self):
+        """মানুষের মতো আচরণ করে ক্লাউডফ্লেয়ার বাইপাস ও অটো-ক্লিক করার নিরাপদ ফাংশন"""
+        try:
+            page_source = self.driver.page_source.lower()
+            page_title = self.driver.title.lower()
+            if "performing security verification" in page_source or "just a moment" in page_title or "cloudflare" in page_source:
+                self.log("🛡️ Cloudflare detected. Waiting & attempting safe auto-click...")
+                # মানুষের মতো একটু বিরতি দেওয়া (1.5 থেকে 2.5 সেকেন্ড) যাতে বট ডিটেক্ট না করে
+                time.sleep(random.uniform(1.5, 2.5))
+                
+                # টার্নস্টাইল আইফ্রেম খোঁজা
+                iframe = WebDriverWait(self.driver, 4).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "iframe[src*='challenges.cloudflare.com'], iframe[title*='Widget containing Cloudflare']"))
+                )
+                self.driver.switch_to.frame(iframe)
+                
+                # ভেরিফিকেশন চেক বক্স লোড হওয়ার জন্য অপেক্ষা
+                checkbox = WebDriverWait(self.driver, 4).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, "label, input[type='checkbox'], .cb-i, span"))
+                )
+                
+                # ActionChains দিয়ে মানুষের মতো মাউস মুভমেন্ট ও ক্লিক সিম্যুলেট করা
+                actions = ActionChains(self.driver)
+                actions.move_to_element(checkbox).pause(random.uniform(0.3, 0.6)).click().perform()
+                
+                self.log("🖱️ Successfully auto-clicked verification box safely!")
+                self.driver.switch_to.default_content()
+                time.sleep(2)
+        except Exception:
+            try:
+                self.driver.switch_to.default_content()
+            except:
+                pass
+
     def start_browser(self):
         try:
             self.status_label.configure(text="Status: Launching Chrome...", text_color="orange")
@@ -386,11 +424,11 @@ class IvaSMSScraperApp:
             self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
             self.driver.get(TARGET_URL)
-            self.log("🌐 Page opened. Complete Cloudflare verification if prompted manually.")
+            self.log("🌐 Page opened. Checking security verification...")
             
-            # ভেরিফিকেশন চলাকালীন আটকে না রেখে ইউজারকে সময় দেওয়ার লুপ
-            for i in range(30):
+            for i in range(25):
                 time.sleep(1)
+                self.handle_cloudflare_safely()
                 try:
                     title = self.driver.title.lower()
                     cur_url = self.driver.current_url.lower()
@@ -440,7 +478,6 @@ class IvaSMSScraperApp:
     def check_idle_and_refresh(self):
         if self.idle_refresh_seconds <= 0: return
         
-        # যদি ক্লাউডফ্লেয়ার বা সিকিউরিটি পেজ সামনে থাকে, রিলোড ব্লক থাকবে
         try:
             page_source = self.driver.page_source.lower()
             page_title = self.driver.title.lower()
@@ -580,11 +617,12 @@ class IvaSMSScraperApp:
     def monitor_loop(self):
         while self.monitoring:
             try:
-                # যদি সিকিউরিটি ভেরিফিকেশন বা ক্লাউডফ্লেয়ার পেজ থাকে, তবে রিলোড বা স্ক্যান বন্ধ থাকবে
+                # যদি ক্লাউডফ্লেয়ার পেজ সামনে আসে, রিলোড বা স্ক্যান বন্ধ রেখে নিজে নিজে ক্লিক করার চেষ্টা করবে
                 page_title = self.driver.title.lower()
                 page_source = self.driver.page_source.lower()
                 if "just a moment" in page_title or "performing security verification" in page_source or "cloudflare" in page_source:
                     self.last_otp_time = time.time()
+                    self.handle_cloudflare_safely()
                     time.sleep(1)
                     continue
 
