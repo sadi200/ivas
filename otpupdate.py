@@ -429,7 +429,8 @@ class IvaSMSScraperApp:
         self.log("Monitoring stopped.")
 
     def check_idle_and_refresh(self):
-        if self.idle_refresh_seconds <= 0: return
+        if self.idle_refresh_seconds <= 0: 
+            return
         
         try:
             page_source = self.driver.page_source.lower()
@@ -441,10 +442,10 @@ class IvaSMSScraperApp:
 
         current_time = time.time()
         if (current_time - self.last_otp_time) >= self.idle_refresh_seconds:
-            # সবার আগে টাইম স্ট্যাম্প আপডেট করে দেব যাতে লুপে বা জিরোতে আটকে না থাকে
+            # সাথে সাথেই টাইম রিসেট করে দিলাম যাতে লুপে বা জিরোতে আটকে না থাকে
             self.last_otp_time = time.time()
             try:
-                self.log("🔄 Inactivity time reached. Executing page/table refresh...")
+                self.log("🔄 Inactivity time reached. Forcing browser page refresh...")
                 cur_url = self.driver.current_url.lower()
                 if "portal/live/my_sms" not in cur_url:
                     self.log("⚠️ Redirect detected! Returning directly to Live SMS URL...")
@@ -452,27 +453,10 @@ class IvaSMSScraperApp:
                     time.sleep(2.5)
                     return
 
-                reloaded = self.driver.execute_script("""
-                    if (window.jQuery) {
-                        if (jQuery.fn.dataTable && jQuery.fn.dataTable.isDataTable('table')) {
-                            jQuery('table').DataTable().ajax.reload(null, false);
-                            return true;
-                        }
-                        if (jQuery('.table').length > 0) {
-                            jQuery('.table').trigger('reload');
-                            return true;
-                        }
-                    }
-                    return false;
-                """)
-
-                if reloaded:
-                    self.log("⚡ In-place Table AJAX successfully reloaded.")
-                    return
-
+                # সরাসরি পেজ রিফ্রেশ কল করা হচ্ছে যাতে কোনো ঝামেলা ছাড়াই রিলোড হয়
                 self.driver.refresh()
                 self.log("🌐 Browser page fully refreshed due to inactivity.")
-                time.sleep(2)
+                time.sleep(2.5)
             except Exception as e:
                 self.log(f"⚠️ Safe reload notice: {e}")
 
