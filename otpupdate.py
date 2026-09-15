@@ -12,8 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 import customtkinter as ctk
 from tkinter import messagebox
 
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
@@ -375,34 +374,18 @@ class IvaSMSScraperApp:
 
     def start_browser(self):
         try:
-            self.status_label.configure(text="Status: Launching Chrome...", text_color="orange")
-            options = Options()
+            self.status_label.configure(text="Status: Launching Undetected Chrome...", text_color="orange")
+            
+            options = uc.ChromeOptions()
             options.add_argument("--start-maximized")
             options.add_argument(f"--user-data-dir={CHROME_PROFILE}")
             options.add_argument("--disable-dev-shm-usage")
             options.add_argument("--no-sandbox")
-            
-            # --- ক্লাউডফ্লেয়ার ও বট ডিটেকশন এড়ানোর শক্তিশালী অপশনসমূহ ---
-            options.add_argument("--disable-blink-features=AutomationControlled")
-            options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            options.add_experimental_option('useAutomationExtension', False)
-            options.add_argument("--disable-infobars")
-            options.add_argument("--disable-gpu")
-            options.add_argument("--disable-extensions")
-            options.add_argument("--dns-prefetch-disable")
-            options.add_argument("--remote-allow-origins=*")
-            options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
 
-            self.driver = webdriver.Chrome(options=options)
-            
-            # ব্রাউজার থেকে navigator.webdriver প্রপার্টি পুরোপুরি রিমুভ করা
-            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            self.driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-                "source": "Object.defineProperty(navigator, 'webdriver', { get: () => undefined })"
-            })
+            self.driver = uc.Chrome(options=options, use_subprocess=True)
 
             self.driver.get(TARGET_URL)
-            self.log("🌐 Page opened. Please complete Cloudflare/login manually in Chrome window if prompted.")
+            self.log("🌐 Page opened with Undetected Chrome. Please complete Cloudflare verification manually.")
 
             try:
                 e_field = self.driver.find_element(By.CSS_SELECTOR, 'input[type="email"], input[name="email"], input[name="username"]')
