@@ -382,15 +382,27 @@ class IvaSMSScraperApp:
             options.add_argument("--disable-dev-shm-usage")
             options.add_argument("--no-sandbox")
             
+            # --- ক্লাউডফ্লেয়ার ও বট ডিটেকশন এড়ানোর শক্তিশালী অপশনসমূহ ---
             options.add_argument("--disable-blink-features=AutomationControlled")
             options.add_experimental_option("excludeSwitches", ["enable-automation"])
             options.add_experimental_option('useAutomationExtension', False)
+            options.add_argument("--disable-infobars")
+            options.add_argument("--disable-gpu")
+            options.add_argument("--disable-extensions")
+            options.add_argument("--dns-prefetch-disable")
+            options.add_argument("--remote-allow-origins=*")
+            options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
 
             self.driver = webdriver.Chrome(options=options)
+            
+            # ব্রাউজার থেকে navigator.webdriver প্রপার্টি পুরোপুরি রিমুভ করা
             self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            self.driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+                "source": "Object.defineProperty(navigator, 'webdriver', { get: () => undefined })"
+            })
 
             self.driver.get(TARGET_URL)
-            self.log("🌐 Page opened. Please complete Cloudflare/login manually in Chrome window.")
+            self.log("🌐 Page opened. Please complete Cloudflare/login manually in Chrome window if prompted.")
 
             try:
                 e_field = self.driver.find_element(By.CSS_SELECTOR, 'input[type="email"], input[name="email"], input[name="username"]')
@@ -442,7 +454,6 @@ class IvaSMSScraperApp:
 
         current_time = time.time()
         if (current_time - self.last_otp_time) >= self.idle_refresh_seconds:
-            # সাথে সাথেই টাইম রিসেট করে দিলাম যাতে লুপে বা জিরোতে আটকে না থাকে
             self.last_otp_time = time.time()
             try:
                 self.log("🔄 Inactivity time reached. Forcing browser page refresh...")
@@ -453,7 +464,6 @@ class IvaSMSScraperApp:
                     time.sleep(2.5)
                     return
 
-                # সরাসরি পেজ রিফ্রেশ কল করা হচ্ছে যাতে কোনো ঝামেলা ছাড়াই রিলোড হয়
                 self.driver.refresh()
                 self.log("🌐 Browser page fully refreshed due to inactivity.")
                 time.sleep(2.5)
