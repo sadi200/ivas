@@ -374,27 +374,27 @@ class IvaSMSScraperApp:
         self.log_box.see("end")
 
     def handle_cloudflare_safely(self):
-        """মানুষের মতো আচরণ করে ক্লাউডফ্লেয়ার বাইপাস ও অটো-ক্লিক করার নিরাপদ ফাংশন"""
         try:
             page_source = self.driver.page_source.lower()
             page_title = self.driver.title.lower()
-            if "performing security verification" in page_source or "just a moment" in page_title or "cloudflare" in page_source:
+            
+            # টেবিল ও ড্যাশবোর্ড লোড থাকলে ক্লাউডফ্লেয়ার চেকার বাইপাস হবে
+            if "table" in page_source and "client system" in page_source:
+                return
+
+            if "performing security verification" in page_source or "just a moment" in page_title or ("cloudflare" in page_source and "ivasms" not in page_title):
                 self.log("🛡️ Cloudflare detected. Waiting & attempting safe auto-click...")
-                # মানুষের মতো একটু বিরতি দেওয়া (1.5 থেকে 2.5 সেকেন্ড) যাতে বট ডিটেক্ট না করে
                 time.sleep(random.uniform(1.5, 2.5))
                 
-                # টার্নস্টাইল আইফ্রেম খোঁজা
                 iframe = WebDriverWait(self.driver, 4).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "iframe[src*='challenges.cloudflare.com'], iframe[title*='Widget containing Cloudflare']"))
                 )
                 self.driver.switch_to.frame(iframe)
                 
-                # ভেরিফিকেশন চেক বক্স লোড হওয়ার জন্য অপেক্ষা
                 checkbox = WebDriverWait(self.driver, 4).until(
                     EC.element_to_be_clickable((By.CSS_SELECTOR, "label, input[type='checkbox'], .cb-i, span"))
                 )
                 
-                # ActionChains দিয়ে মানুষের মতো মাউস মুভমেন্ট ও ক্লিক সিম্যুলেট করা
                 actions = ActionChains(self.driver)
                 actions.move_to_element(checkbox).pause(random.uniform(0.3, 0.6)).click().perform()
                 
@@ -617,14 +617,16 @@ class IvaSMSScraperApp:
     def monitor_loop(self):
         while self.monitoring:
             try:
-                # যদি ক্লাউডফ্লেয়ার পেজ সামনে আসে, রিলোড বা স্ক্যান বন্ধ রেখে নিজে নিজে ক্লিক করার চেষ্টা করবে
                 page_title = self.driver.title.lower()
                 page_source = self.driver.page_source.lower()
-                if "just a moment" in page_title or "performing security verification" in page_source or "cloudflare" in page_source:
-                    self.last_otp_time = time.time()
-                    self.handle_cloudflare_safely()
-                    time.sleep(1)
-                    continue
+                
+                # যদি টেবিল ও ড্যাশবোর্ড থাকে, তবে ক্লাউডফ্লেয়ার চেক বাইপাস করে সরাসরি এসএমএস রিড করবে
+                if not ("table" in page_source and "client system" in page_source):
+                    if "just a moment" in page_title or "performing security verification" in page_source:
+                        self.last_otp_time = time.time()
+                        self.handle_cloudflare_safely()
+                        time.sleep(1)
+                        continue
 
                 self.ensure_correct_url()
                 self.check_idle_and_refresh()
