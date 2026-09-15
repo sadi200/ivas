@@ -12,6 +12,38 @@ from concurrent.futures import ThreadPoolExecutor
 import customtkinter as ctk
 from tkinter import messagebox
 
+# Python 3.14 এ distutils না থাকার সমস্যা সমাধানের জন্য পচ
+try:
+    from distutils.version import LooseVersion
+except ImportError:
+    import sys
+    from types import ModuleType
+    distutils_mod = ModuleType('distutils')
+    version_mod = ModuleType('distutils.version')
+    class LooseVersion:
+        def __init__(self, vstring):
+            self.vstring = vstring
+        def __str__(self):
+            return self.vstring
+        def _parse(self, vstring):
+            return [int(x) for x in re.findall(r'\d+', vstring)]
+        def __lt__(self, other):
+            return self._parse(self.vstring) < self._parse(other.vstring)
+        def __le__(self, other):
+            return self._parse(self.vstring) <= self._parse(other.vstring)
+        def __eq__(self, other):
+            return self._parse(self.vstring) == self._parse(other.vstring)
+        def __ge__(self, other):
+            return self._parse(self.vstring) >= self._parse(other.vstring)
+        def __gt__(self, other):
+            return self._parse(self.vstring) > self._parse(other.vstring)
+        def __ne__(self, other):
+            return self._parse(self.vstring) != self._parse(other.vstring)
+    version_mod.LooseVersion = LooseVersion
+    distutils_mod.version = version_mod
+    sys.modules['distutils'] = distutils_mod
+    sys.modules['distutils.version'] = version_mod
+
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
