@@ -340,7 +340,7 @@ class IvaSMSScraperApp:
 
         self.log_box = ctk.CTkTextbox(root, width=620, height=230, font=("Consolas", 12))
         self.log_box.pack(pady=10, padx=20)
-        self.log("Click 'Open Chrome & Login' -> Sign in -> Click 'Start Monitoring'")
+        self.log("Click 'Open Chrome & Login' -> Verify Cloudflare manually -> Click 'Start Monitoring'")
 
         self.start_timer_updater()
 
@@ -373,21 +373,6 @@ class IvaSMSScraperApp:
         self.log_box.insert("end", f"[{timestamp}] {text}\n")
         self.log_box.see("end")
 
-    def handle_cloudflare_safely(self):
-        try:
-            page_source = self.driver.page_source.lower()
-            page_title = self.driver.title.lower()
-            
-            if "table" in page_source and "client system" in page_source:
-                return
-
-            # ক্লাউডফ্লেয়ার বা সিকিউরিটি পেজ আসলে নিজে ক্লিক না করে ইউজারকে ম্যানুয়ালি ভেরিফাই করার সুযোগ দেবে
-            if "performing security verification" in page_source or "just a moment" in page_title or ("cloudflare" in page_source and "ivasms" not in page_title):
-                self.log("🛡️ Cloudflare verification active. Please verify manually in the browser...")
-                time.sleep(2)
-        except Exception:
-            pass
-
     def start_browser(self):
         try:
             self.status_label.configure(text="Status: Launching Chrome...", text_color="orange")
@@ -405,21 +390,9 @@ class IvaSMSScraperApp:
             self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
             self.driver.get(TARGET_URL)
-            self.log("🌐 Page opened. Complete Cloudflare verification manually if prompted.")
-            
-            for i in range(25):
-                time.sleep(1)
-                self.handle_cloudflare_safely()
-                try:
-                    title = self.driver.title.lower()
-                    cur_url = self.driver.current_url.lower()
-                    page_source = self.driver.page_source.lower()
-                    if "portal/live/my_sms" in cur_url and "just a moment" not in title and "performing security verification" not in page_source:
-                        self.log("✅ Page loaded successfully!")
-                        break
-                except Exception:
-                    pass
+            self.log("🌐 Page opened. Please complete Cloudflare/login manually in Chrome window.")
 
+            # ব্রাউজার ওপেন হওয়ার পর কোনো অটোমেটিক লুপ রাখা হয়নি যাতে আপনি নিজের মতো ভেরিফাই করতে পারেন
             try:
                 e_field = self.driver.find_element(By.CSS_SELECTOR, 'input[type="email"], input[name="email"], input[name="username"]')
                 p_field = self.driver.find_element(By.CSS_SELECTOR, 'input[type="password"], input[name="password"]')
@@ -427,11 +400,11 @@ class IvaSMSScraperApp:
                 e_field.send_keys(LOGIN_EMAIL)
                 p_field.clear()
                 p_field.send_keys(LOGIN_PASSWORD)
-                self.log("Credentials auto-filled. Complete sign in if needed.")
+                self.log("Credentials auto-filled if fields were found.")
             except Exception:
                 pass
 
-            self.status_label.configure(text="Chrome ready. Sign in and start monitoring", text_color="green")
+            self.status_label.configure(text="Chrome ready. Verify & click Start Monitoring", text_color="green")
             self.start_mon_btn.configure(state="normal")
             self.start_browser_btn.configure(state="disabled")
         except Exception as e:
@@ -459,6 +432,7 @@ class IvaSMSScraperApp:
     def check_idle_and_refresh(self):
         if self.idle_refresh_seconds <= 0: return
         
+        # মনিটরিং চলাকালীন যদি কখনো ক্লাউডফ্লেয়ার আসে তবে রিলোড ব্লক থাকবে
         try:
             page_source = self.driver.page_source.lower()
             page_title = self.driver.title.lower()
@@ -545,7 +519,6 @@ class IvaSMSScraperApp:
             processed_sms_ids.add(msg_unique_key)
             if len(processed_sms_ids) > 10000: processed_sms_ids.clear()
 
-            # নতুন সফল SMS আসলে তবেই টাইমার রিসেট হবে
             self.last_otp_time = time.time()
 
             srv_icon, srv_name = detect_service_and_icon(msg_content, col_sid)
@@ -601,11 +574,11 @@ class IvaSMSScraperApp:
                 page_title = self.driver.title.lower()
                 page_source = self.driver.page_source.lower()
                 
-                if not ("table" in page_source and "client system" in page_source):
-                    if "just a moment" in page_title or "performing security verification" in page_source:
-                        self.handle_cloudflare_safely()
-                        time.sleep(1)
-                        continue
+                # মনিটরিং শুরু করার পর যদি ক্লাউডফ্লেয়ার স্ক্রিন আসে, তবে স্ক্রিপ্ট শুধু অপেক্ষা করবে যতক্ষণ না আপনি পাস করেন
+                if "just a moment" in page_title or "performing security verification" in page_source:
+                    self.log("🛡️ Cloudflare verification active. Waiting for manual verification...")
+                    time.sleep(2)
+                    continue
 
                 self.ensure_correct_url()
                 self.check_idle_and_refresh()
