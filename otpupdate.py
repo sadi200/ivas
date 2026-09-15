@@ -392,7 +392,6 @@ class IvaSMSScraperApp:
             self.driver.get(TARGET_URL)
             self.log("🌐 Page opened. Please complete Cloudflare/login manually in Chrome window.")
 
-            # ব্রাউজার ওপেন হওয়ার পর কোনো অটোমেটিক লুপ রাখা হয়নি যাতে আপনি নিজের মতো ভেরিফাই করতে পারেন
             try:
                 e_field = self.driver.find_element(By.CSS_SELECTOR, 'input[type="email"], input[name="email"], input[name="username"]')
                 p_field = self.driver.find_element(By.CSS_SELECTOR, 'input[type="password"], input[name="password"]')
@@ -432,7 +431,6 @@ class IvaSMSScraperApp:
     def check_idle_and_refresh(self):
         if self.idle_refresh_seconds <= 0: return
         
-        # মনিটরিং চলাকালীন যদি কখনো ক্লাউডফ্লেয়ার আসে তবে রিলোড ব্লক থাকবে
         try:
             page_source = self.driver.page_source.lower()
             page_title = self.driver.title.lower()
@@ -443,9 +441,10 @@ class IvaSMSScraperApp:
 
         current_time = time.time()
         if (current_time - self.last_otp_time) >= self.idle_refresh_seconds:
+            # সবার আগে টাইম স্ট্যাম্প আপডেট করে দেব যাতে লুপে বা জিরোতে আটকে না থাকে
             self.last_otp_time = time.time()
             try:
-                self.log("🔄 Inactivity detected. Executing session-safe reload...")
+                self.log("🔄 Inactivity time reached. Executing page/table refresh...")
                 cur_url = self.driver.current_url.lower()
                 if "portal/live/my_sms" not in cur_url:
                     self.log("⚠️ Redirect detected! Returning directly to Live SMS URL...")
@@ -461,6 +460,7 @@ class IvaSMSScraperApp:
                         }
                         if (jQuery('.table').length > 0) {
                             jQuery('.table').trigger('reload');
+                            return true;
                         }
                     }
                     return false;
@@ -470,7 +470,8 @@ class IvaSMSScraperApp:
                     self.log("⚡ In-place Table AJAX successfully reloaded.")
                     return
 
-                self.driver.get(TARGET_URL)
+                self.driver.refresh()
+                self.log("🌐 Browser page fully refreshed due to inactivity.")
                 time.sleep(2)
             except Exception as e:
                 self.log(f"⚠️ Safe reload notice: {e}")
@@ -574,7 +575,6 @@ class IvaSMSScraperApp:
                 page_title = self.driver.title.lower()
                 page_source = self.driver.page_source.lower()
                 
-                # মনিটরিং শুরু করার পর যদি ক্লাউডফ্লেয়ার স্ক্রিন আসে, তবে স্ক্রিপ্ট শুধু অপেক্ষা করবে যতক্ষণ না আপনি পাস করেন
                 if "just a moment" in page_title or "performing security verification" in page_source:
                     self.log("🛡️ Cloudflare verification active. Waiting for manual verification...")
                     time.sleep(2)
