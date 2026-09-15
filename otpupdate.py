@@ -473,31 +473,17 @@ class IvaSMSScraperApp:
         if self.idle_refresh_seconds <= 0: 
             return
         
-        try:
-            page_source = self.driver.page_source.lower()
-            page_title = self.driver.title.lower()
-            if "performing security verification" in page_source or "just a moment" in page_title or "cloudflare" in page_source:
-                return
-        except Exception:
-            pass
-
         current_time = time.time()
+        # সময় শেষ হওয়া মাত্রই সরাসরি ফোর্সড পেজ রিফ্রেশ করবে
         if (current_time - self.last_otp_time) >= self.idle_refresh_seconds:
             self.last_otp_time = time.time()
             try:
                 self.log("🔄 Inactivity time reached. Forcing browser page refresh...")
-                cur_url = self.driver.current_url.lower()
-                if "portal/live/my_sms" not in cur_url:
-                    self.log("⚠️ Redirect detected! Returning directly to Live SMS URL...")
-                    self.driver.get(TARGET_URL)
-                    time.sleep(2.5)
-                    return
-
                 self.driver.refresh()
-                self.log("🌐 Browser page fully refreshed due to inactivity.")
-                time.sleep(2.5)
+                self.log("🌐 Browser page successfully refreshed.")
+                time.sleep(3)
             except Exception as e:
-                self.log(f"⚠️ Safe reload notice: {e}")
+                self.log(f"⚠️ Refresh notice: {e}")
 
     def ensure_correct_url(self):
         try:
