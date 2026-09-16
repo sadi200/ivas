@@ -63,7 +63,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import StaleElementReferenceException
+from selenium.common.exceptions import StaleElementReferenceException, UnexpectedAlertPresentException
 
 BOT_TOKEN = "8867778383:AAGKHcZdr4mA7bX2Tl4AO_LOrqjelOlTqt4"
 TELEGRAM_GROUP_ID = "-1004318007695"
@@ -338,7 +338,7 @@ def add_balance_fast(uid, reward_amount, range_name=""):
 class SMSPanelScraperApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("New SMS Panel Monitor (16s Refresh)")
+        self.root.title("Instant SMS Panel Monitor (Fast Ajax Refresh)")
         self.root.geometry("670x650")
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
@@ -347,9 +347,9 @@ class SMSPanelScraperApp:
         self.monitoring = False
         self.sms_count = 0
         self.last_otp_time = time.time()
-        self.idle_refresh_seconds = 16  # প্রতি ১৬ সেকেন্ড পরপর রিফ্রেশ টাইম সেট করা হলো
+        self.idle_refresh_seconds = 8  # মাত্র ৮ সেকেন্ড পর পর ইনস্ট্যান্ট রিফ্রেশ বা টেবিল আপডেট
 
-        self.title_label = ctk.CTkLabel(root, text="SMS Panel Live Monitor Engine", font=ctk.CTkFont(size=20, weight="bold"))
+        self.title_label = ctk.CTkLabel(root, text="Instant SMS Panel Live Monitor Engine", font=ctk.CTkFont(size=20, weight="bold"))
         self.title_label.pack(pady=12)
 
         self.btn_frame = ctk.CTkFrame(root)
@@ -370,12 +370,12 @@ class SMSPanelScraperApp:
         self.refresh_lbl = ctk.CTkLabel(self.setting_frame, text="⏱ Auto-Refresh Interval:", font=ctk.CTkFont(size=13, weight="bold"))
         self.refresh_lbl.pack(side="left", padx=8, pady=8)
 
-        self.minute_options = ["16 Seconds", "30 Seconds", "1 Minute", "2 Minutes", "3 Minutes", "5 Minutes", "OFF"]
+        self.minute_options = ["5 Seconds", "8 Seconds", "12 Seconds", "16 Seconds", "30 Seconds", "OFF"]
         self.dropdown = ctk.CTkOptionMenu(self.setting_frame, values=self.minute_options, command=self.on_dropdown_change, width=130)
-        self.dropdown.set("16 Seconds")
+        self.dropdown.set("8 Seconds")
         self.dropdown.pack(side="left", padx=5, pady=8)
 
-        self.timer_display_lbl = ctk.CTkLabel(self.setting_frame, text="Next: 16s", text_color="orange")
+        self.timer_display_lbl = ctk.CTkLabel(self.setting_frame, text="Next: 8s", text_color="orange")
         self.timer_display_lbl.pack(side="left", padx=10, pady=8)
 
         self.status_label = ctk.CTkLabel(root, text="Status: Ready to launch Chrome", text_color="gray", font=ctk.CTkFont(size=14))
@@ -400,11 +400,6 @@ class SMSPanelScraperApp:
             self.idle_refresh_seconds = secs
             self.last_otp_time = time.time()
             self.log(f"⏱ Auto-refresh set to: {secs} Seconds")
-        else:
-            mins = int(choice.split()[0])
-            self.idle_refresh_seconds = mins * 60
-            self.last_otp_time = time.time()
-            self.log(f"⏱ Auto-refresh set to: {mins} Minutes")
 
     def start_timer_updater(self):
         def loop():
@@ -413,7 +408,7 @@ class SMSPanelScraperApp:
                     if self.idle_refresh_seconds > 0:
                         elapsed = int(time.time() - self.last_otp_time)
                         remaining = max(0, self.idle_refresh_seconds - elapsed)
-                        self.root.after(0, lambda r=remaining: self.timer_display_lbl.configure(text=f"Next in: {r}s", text_color="orange" if r > 5 else "red"))
+                        self.root.after(0, lambda r=remaining: self.timer_display_lbl.configure(text=f"Next in: {r}s", text_color="orange" if r > 3 else "red"))
                     else:
                         self.root.after(0, lambda: self.timer_display_lbl.configure(text="Disabled", text_color="gray"))
                 time.sleep(1)
@@ -457,10 +452,10 @@ class SMSPanelScraperApp:
         if not self.driver: return
         self.monitoring = True
         self.last_otp_time = time.time()
-        self.status_label.configure(text="Monitoring Active - Zero Drop Mode", text_color="green")
+        self.status_label.configure(text="Monitoring Active - Instant Mode", text_color="green")
         self.start_mon_btn.configure(state="disabled")
         self.stop_btn.configure(state="normal")
-        self.log("Live SMS monitor started with 16s refresh cycle.")
+        self.log("Live SMS monitor started with fast background update mode.")
         threading.Thread(target=self.monitor_loop, daemon=True).start()
 
     def stop_monitoring(self):
@@ -475,24 +470,32 @@ class SMSPanelScraperApp:
             return
         
         current_time = time.time()
-        # নির্দিষ্ট ১৬ সেকেন্ড পরপর পেজ রিফ্রেশ করার জন্য
         if (current_time - self.last_otp_time) >= self.idle_refresh_seconds:
             self.last_otp_time = time.time()
             try:
-                self.log("🔄 Refresh interval reached (16s). Forcing browser page refresh...")
-                self.driver.refresh()
-                time.sleep(1.5)
-            except Exception as e:
-                self.log(f"⚠️ Refresh notice: {e}")
+                # ফুল পেজ রিফ্রেশ করার বদলে DataTables এর নিজস্ব AJAX রিলোড ফাংশন কল করা হবে (খুব দ্রুত কাজ করবে)
+                self.driver.execute_script("""
+                    if (typeof $ !== 'undefined' && $.fn.DataTable.isDataTable('#dt')) {
+                        $('#dt').DataTable().ajax.reload(null, false);
+                    } else if (typeof dt !== 'undefined' && dt.ajax) {
+                        dt.ajax.reload(null, false);
+                    } else {
+                        location.reload();
+                    }
+                """)
+            except Exception:
+                try:
+                    self.driver.refresh()
+                except Exception as e:
+                    self.log(f"⚠️ Refresh notice: {e}")
 
     def ensure_correct_url(self):
         try:
             cur_url = self.driver.current_url
             if cur_url and "SMSCDRStats" not in cur_url:
                 if "93.190.143.35" in cur_url:
-                    self.log(f"⚠️ Wrong page detected. Redirecting back...")
                     self.driver.get(TARGET_URL)
-                    time.sleep(1.5)
+                    time.sleep(1.0)
         except Exception:
             pass
 
@@ -567,6 +570,13 @@ class SMSPanelScraperApp:
     def monitor_loop(self):
         while self.monitoring:
             try:
+                # পপআপ অ্যালার্ট হ্যান্ডেল করার কোড
+                try:
+                    alert = self.driver.switch_to.alert
+                    alert.accept()
+                except Exception:
+                    pass
+
                 self.ensure_correct_url()
                 self.check_idle_and_refresh()
                 
@@ -575,6 +585,13 @@ class SMSPanelScraperApp:
                     try: self.process_table_row(r)
                     except StaleElementReferenceException: continue
                 time.sleep(CHECK_INTERVAL)
+            except UnexpectedAlertPresentException:
+                try:
+                    alert = self.driver.switch_to.alert
+                    alert.accept()
+                except Exception:
+                    pass
+                time.sleep(0.2)
             except Exception as e:
                 err_msg = str(e).lower()
                 if "no such window" in err_msg or "target window already closed" in err_msg or "invalid session id" in err_msg:
