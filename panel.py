@@ -65,15 +65,15 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import StaleElementReferenceException, UnexpectedAlertPresentException
 
-BOT_TOKEN = "8867778383:AAGKHcZdr4mA7bX2Tl4AO_LOrqjelOlTqt4"
+BOT_TOKEN = "8867778383:AAEGVqNMr0GMrPcghX8DmBGkbpJXJPaObwU"
 TELEGRAM_GROUP_ID = "-1004318007695"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in locals() else os.getcwd()
 DB_FILE = os.path.join(BASE_DIR, "bot_data.json")
 USERS_FILE = os.path.join(BASE_DIR, "users_db.json")
 
-# প্যানেল লিংক
-TARGET_URL = "http://93.190.143.35/ints/client/SMSCDRStats"
+# সothik প্যানেল লিংক (SMSCDRReports)
+TARGET_URL = "http://93.190.143.35/ints/agent/SMSCDRReports"
 LOGIN_EMAIL = "maiologgmail.com"
 LOGIN_PASSWORD = "Abdi20@"
 
@@ -347,7 +347,7 @@ class SMSPanelScraperApp:
         self.monitoring = False
         self.sms_count = 0
         self.last_otp_time = time.time()
-        self.idle_refresh_seconds = 8  # মাত্র ৮ সেকেন্ড পর পর ইনস্ট্যান্ট রিফ্রেশ বা টেবিল আপডেট
+        self.idle_refresh_seconds = 8
 
         self.title_label = ctk.CTkLabel(root, text="Instant SMS Panel Live Monitor Engine", font=ctk.CTkFont(size=20, weight="bold"))
         self.title_label.pack(pady=12)
@@ -473,7 +473,6 @@ class SMSPanelScraperApp:
         if (current_time - self.last_otp_time) >= self.idle_refresh_seconds:
             self.last_otp_time = time.time()
             try:
-                # ফুল পেজ রিফ্রেশ করার বদলে DataTables এর নিজস্ব AJAX রিলোড ফাংশন কল করা হবে (খুব দ্রুত কাজ করবে)
                 self.driver.execute_script("""
                     if (typeof $ !== 'undefined' && $.fn.DataTable.isDataTable('#dt')) {
                         $('#dt').DataTable().ajax.reload(null, false);
@@ -492,7 +491,7 @@ class SMSPanelScraperApp:
     def ensure_correct_url(self):
         try:
             cur_url = self.driver.current_url
-            if cur_url and "SMSCDRStats" not in cur_url:
+            if cur_url and "SMSCDRReports" not in cur_url:
                 if "93.190.143.35" in cur_url:
                     self.driver.get(TARGET_URL)
                     time.sleep(1.0)
@@ -570,7 +569,6 @@ class SMSPanelScraperApp:
     def monitor_loop(self):
         while self.monitoring:
             try:
-                # পপআপ অ্যালার্ট হ্যান্ডেল করার কোড
                 try:
                     alert = self.driver.switch_to.alert
                     alert.accept()
