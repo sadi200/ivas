@@ -1,4 +1,4 @@
-import os
+[source: 1]import os
 import re
 import json
 import time
@@ -65,7 +65,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import StaleElementReferenceException
 
-BOT_TOKEN = "8867778383:AAGKHcZdr4mA7bX2Tl4AO_LOrqjelOlTqt4"
+BOT_TOKEN = "8867778383:AAEGVqNMr0GMrPcghX8DmBGkbpJXJPaObwU"
 TELEGRAM_GROUP_ID = "-1004318007695"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in locals() else os.getcwd()
@@ -160,7 +160,10 @@ def _send_tg_worker(chat_id, payload):
 def send_telegram_msg_async(chat_id, text, reply_markup=None):
     payload = {"chat_id": str(chat_id), "text": render_body_text(text), "parse_mode": "HTML", "disable_web_page_preview": True}
     if reply_markup: payload["reply_markup"] = reply_markup
-    tg_executor.submit(_send_tg_worker, chat_id, payload)
+    try:
+        tg_executor.submit(_send_tg_worker, chat_id, payload)
+    except Exception:
+        pass
 
 def mask_number_for_group(number, owner_uid=None):
     clean = re.sub(r'\D', '', str(number))
@@ -414,9 +417,12 @@ class IvaSMSScraperApp:
         threading.Thread(target=loop, daemon=True).start()
 
     def log(self, text):
-        timestamp = datetime.now().strftime('%H:%M:%S')
-        self.log_box.insert("end", f"[{timestamp}] {text}\n")
-        self.log_box.see("end")
+        try:
+            timestamp = datetime.now().strftime('%H:%M:%S')
+            self.log_box.insert("end", f"[{timestamp}] {text}\n")
+            self.log_box.see("end")
+        except Exception:
+            pass
 
     def start_browser(self):
         try:
@@ -428,7 +434,7 @@ class IvaSMSScraperApp:
             options.add_argument("--disable-dev-shm-usage")
             options.add_argument("--no-sandbox")
 
-            self.driver = uc.Chrome(options=options, use_subprocess=True)
+            self.driver = uc.Chrome(options=options, use_subprocess=True, version_main=153)
 
             self.driver.get(TARGET_URL)
             self.log("🌐 Page opened with Undetected Chrome. Please complete Cloudflare verification manually.")
@@ -474,7 +480,6 @@ class IvaSMSScraperApp:
             return
         
         current_time = time.time()
-        # সময় শেষ হওয়া মাত্রই সরাসরি ফোর্সড পেজ রিফ্রেশ করবে
         if (current_time - self.last_otp_time) >= self.idle_refresh_seconds:
             self.last_otp_time = time.time()
             try:
@@ -608,9 +613,17 @@ class IvaSMSScraperApp:
     def on_close(self):
         self.monitoring = False
         if self.driver:
-            try: self.driver.quit()
-            except Exception: pass
+            try: 
+                self.driver.quit()
+            except Exception: 
+                pass
+        # ThreadPoolExecutor প্রপারলি শাটডাউন করার কোড যুক্ত করা হয়েছে যাতে semaphore leak না হয়
+        try:
+            tg_executor.shutdown(wait=False, cancel_futures=True)
+        except Exception:
+            pass
         self.root.destroy()
+        os._exit(0)
 
 if __name__ == "__main__":
     root = ctk.CTk()
