@@ -503,7 +503,7 @@ class SMSPanelScraperApp:
             cur_url = self.driver.current_url
             if cur_url and "SMSCDRReports" not in cur_url:
                 if "93.190.143.35" in cur_url:
-                    self.driver.get(TARGET_URL)
+                    self.get(TARGET_URL)
                     time.sleep(1.0)
         except Exception:
             pass
@@ -518,9 +518,7 @@ class SMSPanelScraperApp:
             if not clean_num or len(clean_num) < 7 or not msg_content: return
 
             extracted_otp = extract_exact_otp(msg_content)
-            if not extracted_otp: 
-                # Debugging: Log if message found but OTP couldn't be extracted
-                return
+            if not extracted_otp: return
             otp = extracted_otp
 
             msg_unique_key = f"{clean_num}_{otp}_{hash(msg_content)}"
@@ -585,18 +583,18 @@ class SMSPanelScraperApp:
 
                 self.ensure_correct_url()
                 
-                # টেবিলের রো থেকে নিখুঁতভাবে ডেটা তোলার জন্য আপডেট করা স্ক্রিপ্ট
+                # ঠিক করা হলো: Date কলাম যোগ হওয়ার কারণে cols[5] এখন SMS কলাম নির্দেশ করছে
                 rows_data = self.driver.execute_script("""
                     let rows = document.querySelectorAll('table tbody tr, table tr');
                     let data = [];
                     for (let r of rows) {
                         let cols = r.querySelectorAll('td');
-                        if (cols.length >= 5) {
+                        if (cols.length >= 6) {
                             data.push({
                                 range: cols[1].innerText.trim(),
                                 number: cols[2].innerText.trim(),
                                 cli: cols[3].innerText.trim(),
-                                sms: cols[4].innerText.trim()
+                                sms: cols[5].innerText.trim()
                             });
                         }
                     }
