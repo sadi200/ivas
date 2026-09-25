@@ -72,7 +72,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in locals() 
 DB_FILE = os.path.join(BASE_DIR, "bot_data.json")
 USERS_FILE = os.path.join(BASE_DIR, "users_db.json")
 
-# Sothik panel link (SMSCDRReports)
 TARGET_URL = "http://93.190.143.35/ints/agent/SMSCDRReports"
 LOGIN_EMAIL = "maiologgmail.com"
 LOGIN_PASSWORD = "Abdi20@"
@@ -173,28 +172,23 @@ def extract_exact_otp(message_text):
     if not message_text: return None
     raw = str(message_text).strip()
 
+    # 1xBet ও অনান্য SMS ফরম্যাটের জন্য পারফেক্ট অপটিমাইজড রেজেক্স
+    hash_match = re.search(r'#\s*(?:Verification\s*code|code)?\s*(\d{4,12})', raw, re.I)
+    if hash_match: return hash_match.group(1).strip()
+
     burmese_m = re.search(r'အတည်ပြုနံပါတ်[\s:=]*(\d{4,12})', raw)
     if burmese_m: return burmese_m.group(1).strip()
 
     kw_match = re.search(r'(?:kod\s*weryfikacyjny|code\s*de\s*verification|verification\s*code|viber\s*code|your\s*code|otp|pin|is\s*your)[\s#:=]*(\d{4,12})', raw, re.I)
     if kw_match: return kw_match.group(1).strip()
 
-    hash_match = re.search(r'#\s*(?:[^\d\n]*?)(\d{4,12})', raw, re.I)
-    if hash_match: return hash_match.group(1).strip()
-
-    pwd_match = re.search(r'(?:Password|Mot\s*de\s*passe|pass|pwd|رمز|کد)[\s:=]*([a-zA-Z0-9]{4,16})', raw, re.I)
-    if pwd_match: return pwd_match.group(1).strip()
-
     digits_std = re.findall(r'\b\d{4,8}\b', raw)
     if digits_std: return digits_std[0].strip()
-
-    digits_long = re.findall(r'\b\d{9,12}\b', raw)
-    if digits_long: return digits_long[0].strip()
 
     fallback = re.search(r'\b[a-zA-Z0-9]{4,12}\b', raw)
     if fallback:
         val = fallback.group(0).strip()
-        if val.upper() not in {"VERIFICATION", "PASSWORD", "VOTRE", "POUR", "AVEC", "INFO", "USER"}:
+        if val.upper() not in {"VERIFICATION", "PASSWORD", "VOTRE", "POUR", "AVEC", "INFO", "USER", "CODE"}:
             return val
     return None
 
@@ -524,7 +518,9 @@ class SMSPanelScraperApp:
             if not clean_num or len(clean_num) < 7 or not msg_content: return
 
             extracted_otp = extract_exact_otp(msg_content)
-            if not extracted_otp: return
+            if not extracted_otp: 
+                # Debugging: Log if message found but OTP couldn't be extracted
+                return
             otp = extracted_otp
 
             msg_unique_key = f"{clean_num}_{otp}_{hash(msg_content)}"
@@ -589,6 +585,7 @@ class SMSPanelScraperApp:
 
                 self.ensure_correct_url()
                 
+                # টেবিলের রো থেকে নিখুঁতভাবে ডেটা তোলার জন্য আপডেট করা স্ক্রিপ্ট
                 rows_data = self.driver.execute_script("""
                     let rows = document.querySelectorAll('table tbody tr, table tr');
                     let data = [];
