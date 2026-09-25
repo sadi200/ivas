@@ -408,10 +408,50 @@ class SMSPanelScraperApp:
                         elapsed = int(time.time() - self.last_refresh_time)
                         remaining = max(0, self.idle_refresh_seconds - elapsed)
                         self.root.after(0, lambda r=remaining: self.timer_display_lbl.configure(text=f"Next in: {r}s", text_color="orange" if r > 3 else "red"))
+                        
+                        if remaining == 0:
+                            self.trigger_browser_refresh()
                     else:
                         self.root.after(0, lambda: self.timer_display_lbl.configure(text="Disabled", text_color="gray"))
                 time.sleep(1)
         threading.Thread(target=loop, daemon=True).start()
+
+    def trigger_browser_refresh(self):
+        self.last_refresh_time = time.time()
+        if not self.driver:
+            return
+        
+        def do_refresh():
+            try:
+                reloaded = self.driver.execute_script("""
+                    try {
+                        if (typeof $ !== 'undefined' && $.fn.DataTable.isDataTable('#dt')) {
+                            $('#dt').DataTable().ajax.reload(null, false);
+                            return true;
+                        } else if (typeof dt !== 'undefined' && dt.ajax) {
+                            dt.ajax.reload(null, false);
+                            return true;
+                        }
+                    } catch(e) {}
+                    return false;
+                """)
+                
+                if not reloaded:
+                    self.driver.get(TARGET_URL)
+                    self.log("🔄 Panel reloaded via URL successfully.")
+                else:
+                    self.log("⚡ Table data refreshed via AJAX.")
+            except Exception as e:
+                try:
+                    self.driver.refresh()
+                    self.log("🔄 Browser page refreshed.")
+                except Exception as ex:
+                    self.log(f"⚠️ Refresh failed: {ex}")
+
+        threading.Thread(target=do_refresh, daemon=True).start()
+
+    def check_idle_and_refresh(self):
+        pass
 
     def log(self, text):
         timestamp = datetime.now().strftime('%H:%M:%S')
@@ -463,36 +503,6 @@ class SMSPanelScraperApp:
         self.start_mon_btn.configure(state="normal")
         self.stop_btn.configure(state="disabled")
         self.log("Monitoring stopped.")
-
-    def check_idle_and_refresh(self):
-        if self.idle_refresh_seconds <= 0: 
-            return
-        
-        current_time = time.time()
-        if (current_time - self.last_refresh_time) >= self.idle_refresh_seconds:
-            self.last_refresh_time = current_time
-            try:
-                success = self.driver.execute_script("""
-                    try {
-                        if (typeof $ !== 'undefined' && $.fn.DataTable.isDataTable('#dt')) {
-                            $('#dt').DataTable().ajax.reload(null, false);
-                            return true;
-                        } else if (typeof dt !== 'undefined' && dt.ajax) {
-                            dt.ajax.reload(null, false);
-                            return true;
-                        }
-                    } catch(e) {}
-                    return false;
-                """)
-                
-                if not success:
-                    self.driver.get(TARGET_URL)
-                    self.log("🔄 Panel reloaded successfully via URL.")
-            except Exception as e:
-                try:
-                    self.driver.refresh()
-                except Exception as ex:
-                    self.log(f"⚠️ Refresh error: {ex}")
 
     def ensure_correct_url(self):
         try:
@@ -578,7 +588,6 @@ class SMSPanelScraperApp:
                     pass
 
                 self.ensure_correct_url()
-                self.check_idle_and_refresh()
                 
                 rows_data = self.driver.execute_script("""
                     let rows = document.querySelectorAll('table tbody tr, table tr');
