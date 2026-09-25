@@ -72,7 +72,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in locals() 
 DB_FILE = os.path.join(BASE_DIR, "bot_data.json")
 USERS_FILE = os.path.join(BASE_DIR, "users_db.json")
 
-# সothik প্যানেল লিংক (SMSCDRReports)
+# Sothik panel link (SMSCDRReports)
 TARGET_URL = "http://93.190.143.35/ints/agent/SMSCDRReports"
 LOGIN_EMAIL = "maiologgmail.com"
 LOGIN_PASSWORD = "Abdi20@"
@@ -81,7 +81,6 @@ CHROME_PROFILE_DIR = os.path.expanduser('~/sadi/IrysNode')
 CHROME_PROFILE = os.path.join(CHROME_PROFILE_DIR, 'chrome_profile')
 os.makedirs(CHROME_PROFILE, exist_ok=True)
 
-CHECK_INTERVAL = 0.2
 processed_sms_ids = set()
 
 tg_executor = ThreadPoolExecutor(max_workers=35)
@@ -346,7 +345,7 @@ class SMSPanelScraperApp:
         self.driver = None
         self.monitoring = False
         self.sms_count = 0
-        self.last_otp_time = time.time()
+        self.last_refresh_time = time.time()
         self.idle_refresh_seconds = 8
 
         self.title_label = ctk.CTkLabel(root, text="Instant SMS Panel Live Monitor Engine", font=ctk.CTkFont(size=20, weight="bold"))
@@ -398,7 +397,7 @@ class SMSPanelScraperApp:
         elif "Seconds" in choice:
             secs = int(choice.split()[0])
             self.idle_refresh_seconds = secs
-            self.last_otp_time = time.time()
+            self.last_refresh_time = time.time()
             self.log(f"⏱ Auto-refresh set to: {secs} Seconds")
 
     def start_timer_updater(self):
@@ -406,7 +405,7 @@ class SMSPanelScraperApp:
             while True:
                 if self.monitoring:
                     if self.idle_refresh_seconds > 0:
-                        elapsed = int(time.time() - self.last_otp_time)
+                        elapsed = int(time.time() - self.last_refresh_time)
                         remaining = max(0, self.idle_refresh_seconds - elapsed)
                         self.root.after(0, lambda r=remaining: self.timer_display_lbl.configure(text=f"Next in: {r}s", text_color="orange" if r > 3 else "red"))
                     else:
@@ -451,11 +450,11 @@ class SMSPanelScraperApp:
     def start_monitoring(self):
         if not self.driver: return
         self.monitoring = True
-        self.last_otp_time = time.time()
-        self.status_label.configure(text="Monitoring Active - Instant Mode", text_color="green")
+        self.last_refresh_time = time.time()
+        self.status_label.configure(text="Monitoring Active - Ultra Fast Mode", text_color="green")
         self.start_mon_btn.configure(state="disabled")
         self.stop_btn.configure(state="normal")
-        self.log("Live SMS monitor started with fast background update mode.")
+        self.log("🚀 Lightning-fast SMS live monitor started!")
         threading.Thread(target=self.monitor_loop, daemon=True).start()
 
     def stop_monitoring(self):
@@ -470,23 +469,30 @@ class SMSPanelScraperApp:
             return
         
         current_time = time.time()
-        if (current_time - self.last_otp_time) >= self.idle_refresh_seconds:
-            self.last_otp_time = time.time()
+        if (current_time - self.last_refresh_time) >= self.idle_refresh_seconds:
+            self.last_refresh_time = current_time
             try:
-                self.driver.execute_script("""
-                    if (typeof $ !== 'undefined' && $.fn.DataTable.isDataTable('#dt')) {
-                        $('#dt').DataTable().ajax.reload(null, false);
-                    } else if (typeof dt !== 'undefined' && dt.ajax) {
-                        dt.ajax.reload(null, false);
-                    } else {
-                        location.reload();
-                    }
+                success = self.driver.execute_script("""
+                    try {
+                        if (typeof $ !== 'undefined' && $.fn.DataTable.isDataTable('#dt')) {
+                            $('#dt').DataTable().ajax.reload(null, false);
+                            return true;
+                        } else if (typeof dt !== 'undefined' && dt.ajax) {
+                            dt.ajax.reload(null, false);
+                            return true;
+                        }
+                    } catch(e) {}
+                    return false;
                 """)
-            except Exception:
+                
+                if not success:
+                    self.driver.get(TARGET_URL)
+                    self.log("🔄 Panel reloaded successfully via URL.")
+            except Exception as e:
                 try:
                     self.driver.refresh()
-                except Exception as e:
-                    self.log(f"⚠️ Refresh notice: {e}")
+                except Exception as ex:
+                    self.log(f"⚠️ Refresh error: {ex}")
 
     def ensure_correct_url(self):
         try:
@@ -498,15 +504,12 @@ class SMSPanelScraperApp:
         except Exception:
             pass
 
-    def process_table_row(self, row):
+    def process_fast_row(self, row_info):
         try:
-            cols = row.find_elements(By.TAG_NAME, "td")
-            if not cols or len(cols) < 5: return
-
-            col_range = cols[1].text.strip()
-            clean_num = re.sub(r'\D', '', cols[2].text.strip())
-            col_cli = cols[3].text.strip()
-            msg_content = cols[4].text.strip()
+            col_range = row_info.get("range", "")
+            clean_num = re.sub(r'\D', '', row_info.get("number", ""))
+            col_cli = row_info.get("cli", "")
+            msg_content = row_info.get("sms", "")
 
             if not clean_num or len(clean_num) < 7 or not msg_content: return
 
@@ -518,9 +521,7 @@ class SMSPanelScraperApp:
             if msg_unique_key in processed_sms_ids: return
 
             processed_sms_ids.add(msg_unique_key)
-            if len(processed_sms_ids) > 10000: processed_sms_ids.clear()
-
-            self.last_otp_time = time.time()
+            if len(processed_sms_ids) > 15000: processed_sms_ids.clear()
 
             srv_icon, srv_name = detect_service_and_icon(msg_content, col_cli)
             country_flag = get_country_flag(clean_num)
@@ -564,9 +565,10 @@ class SMSPanelScraperApp:
                 self.log(f"ℹ️ Unassigned Number: +{clean_num}")
 
         except Exception as e:
-            self.log(f"Row error: {e}")
+            self.log(f"Row parse error: {e}")
 
     def monitor_loop(self):
+        fast_interval = 0.05
         while self.monitoring:
             try:
                 try:
@@ -578,25 +580,42 @@ class SMSPanelScraperApp:
                 self.ensure_correct_url()
                 self.check_idle_and_refresh()
                 
-                rows = self.driver.find_elements(By.CSS_SELECTOR, "table tbody tr, table tr")
-                for r in rows:
-                    try: self.process_table_row(r)
-                    except StaleElementReferenceException: continue
-                time.sleep(CHECK_INTERVAL)
+                rows_data = self.driver.execute_script("""
+                    let rows = document.querySelectorAll('table tbody tr, table tr');
+                    let data = [];
+                    for (let r of rows) {
+                        let cols = r.querySelectorAll('td');
+                        if (cols.length >= 5) {
+                            data.push({
+                                range: cols[1].innerText.trim(),
+                                number: cols[2].innerText.trim(),
+                                cli: cols[3].innerText.trim(),
+                                sms: cols[4].innerText.trim()
+                            });
+                        }
+                    }
+                    return data;
+                """)
+
+                if rows_data:
+                    for row_info in rows_data:
+                        self.process_fast_row(row_info)
+
+                time.sleep(fast_interval)
             except UnexpectedAlertPresentException:
                 try:
                     alert = self.driver.switch_to.alert
                     alert.accept()
                 except Exception:
                     pass
-                time.sleep(0.2)
+                time.sleep(0.05)
             except Exception as e:
                 err_msg = str(e).lower()
                 if "no such window" in err_msg or "target window already closed" in err_msg or "invalid session id" in err_msg:
                     self.log("🛑 Browser closed.")
                     self.root.after(0, self.stop_monitoring)
                     break
-                time.sleep(0.5)
+                time.sleep(0.2)
 
     def on_close(self):
         self.monitoring = False
