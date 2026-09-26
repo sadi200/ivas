@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
 
 # ================= Configuration =================
-BOT_TOKEN = "8867778383:AAGKHcZdr4mA7bX2Tl4AO_LOrqjelOlTqt4"
+BOT_TOKEN = "8867778383:AAEGVqNMr0GMrPcghX8DmBGkbpJXJPaObwU"
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 FILE_URL = f"https://api.telegram.org/file/bot{BOT_TOKEN}/"
 
