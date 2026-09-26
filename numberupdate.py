@@ -1088,7 +1088,7 @@ def handle_message(msg):
         bot_name = bot_info.get("username", "YourBot")
         ref_link = f"https://t.me/{bot_name}?start=ref_{sender_id}"
         all_u = get_all_users_from_file()
-        my_refs = [uid for uid, dat in all_u.items() if dat.get("referred_by"] == str(sender_id)]
+        my_refs = [uid for uid, dat in all_u.items() if dat.get("referred_by") == str(sender_id)]
         
         msg_text = f"""━━━━━━━━━━━━━━━━━━
 {PEM['user']} <b>USER PROFILE</b>
